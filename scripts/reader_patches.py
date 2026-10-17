@@ -129,8 +129,18 @@ def patch_wechat_db(data):
     def _collect_key_candidates'''
     # The downloaded upstream bytes have LF line endings.
     if data.count(before)!=1:raise ValueError('WeChat extraction changed; review legacy-key fallback')
-    notice=b'# Modified by Tulpa contributors: bounded legacy key recovery; see scripts/reader_patches.py.\n'
-    return notice+data.replace(before,after)
+    notice=b'# Modified by Tulpa contributors: bounded legacy key recovery and account-root discovery; see scripts/reader_patches.py.\n'
+    data=data.replace(before,after)
+    start=data.index(b'def _locate_account_root(')
+    end=data.index(b'\ndef auto_detect_db_dir(',start)
+    discovery=data[start:end]
+    # E:\\ is absolute; stripping its separator produces the drive-relative E:.
+    for name in (b'root',b'cand'):
+        before=name+b' = '+name+b'.rstrip("\\\\/")'
+        if discovery.count(before)!=1:
+            raise ValueError('WeChat directory discovery changed; review drive-root preservation')
+        discovery=discovery.replace(before,name+b' = os.path.normpath('+name+b')')
+    return notice+data[:start]+discovery+data[end:]
 
 
 def patch_qq_helper(data):
