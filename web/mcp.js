@@ -44,7 +44,7 @@
       </details>
       <section id="mcp-secret" hidden><h3>3. 检测并连接 Agent</h3><p>Token 只显示这一次。关闭后无法找回；丢失时撤销并重新创建。</p><label>本机地址<input id="mcp-url" readonly></label><label>访问 Token<input id="mcp-token" type="password" readonly autocomplete="off"></label><button id="mcp-reveal" type="button">显示 / 隐藏 Token</button>
       <p><button id="mcp-test" type="button">检测连接与工具</button></p><p id="mcp-test-result" role="status"></p>
-      <p>下方是将写入本机 Codex 的配置。点击写入会备份原文件、保留其他设置；已有同名连接时不会覆盖。写入后请在 Codex 的 MCP 设置中重新连接，必要时重启 Codex。</p><textarea id="mcp-config" readonly rows="5" aria-label="Codex MCP 连接配置"></textarea><button id="mcp-install-codex" type="button">写入本机 Codex 配置</button> <button id="mcp-copy" type="button">复制 Codex 配置</button><p id="mcp-install-result" role="status"></p><small class="mcp-muted">其他客户端：选择 Streamable HTTP，填写上方地址，添加 Authorization: Bearer Token。OneBot 的密钥不需要填入客户端。</small></section>
+      <p>下方是将写入本机 Codex 的配置。点击写入会备份原文件、保留其他设置；已有同名连接时不会覆盖。写入后请在 Codex 的 MCP 设置中重新连接，必要时重启 Codex。</p><label for="mcp-server-name">Codex 中的 MCP 名称</label><input id="mcp-server-name" value="tulpa" maxlength="64" pattern="[A-Za-z0-9_-]{1,64}" autocomplete="off" spellcheck="false" aria-describedby="mcp-server-name-hint"><small id="mcp-server-name-hint" class="mcp-muted">已有 tulpa 连接时可填 tulpa_wechat。支持英文字母、数字、下划线和短横线；下方配置会同步更新。</small><textarea id="mcp-config" readonly rows="5" aria-label="Codex MCP 连接配置"></textarea><button id="mcp-install-codex" type="button">写入本机 Codex 配置</button> <button id="mcp-copy" type="button">复制 Codex 配置</button><p id="mcp-install-result" role="status"></p><small class="mcp-muted">其他客户端：选择 Streamable HTTP，填写上方地址，添加 Authorization: Bearer Token。OneBot 的密钥不需要填入客户端。</small></section>
       <h3>已授权连接</h3><div id="mcp-connections"></div>
       <details id="mcp-advanced"><summary>高级服务设置</summary><p class="mcp-muted">通常无需修改。停用服务会断开外部 Agent；修改端口后，需要同步修改客户端的连接地址。</p><div class="mcp-service"><label><input id="mcp-enabled" type="checkbox">启用本机 MCP 服务</label><label>端口 <input id="mcp-port" type="number" min="1024" max="65535" value="18777"></label><button id="mcp-save-service" type="button">应用高级设置</button></div></details>
       <details><summary>最近访问记录</summary><p class="mcp-muted">只记录工具、耗时和读取数量，不记录查询词、正文或 Token。</p><div id="mcp-audit"></div></details>
@@ -277,21 +277,33 @@
         serviceState(await api('','PUT',{enabled:true,port}));
         if(!current.running)throw Error(current.error||'MCP 服务尚未启动，请稍后重试。');
       }
-      const result=await api('/connections','POST',body);credential=result;
+      const result=await api('/connections','POST',body);credential={...result,scope:body,url:current.url};
       $('mcp-test-result').textContent=$('mcp-install-result').textContent='';$('mcp-install-codex').disabled=false;$('mcp-copy').textContent='复制 Codex 配置';
       $('mcp-secret').hidden=false;$('mcp-url').value=current.url;$('mcp-token').value=result.token;
-      $('mcp-config').value='[mcp_servers.tulpa]\nurl = '+JSON.stringify(current.url)+'\nhttp_headers = { Authorization = '+JSON.stringify('Bearer '+result.token)+' }\ntool_timeout_sec = 240\n';
-      for(const [flag,tool] of [['send','send_qq_message'],['manage','manage_qq_group']])if(body[flag])$('mcp-config').value+='\n[mcp_servers.tulpa.tools.'+tool+']\napproval_mode = \"approve\"\n';
-      if(body.chat)for(const tool of ['start_chat_session','get_chat_session','list_chat_sessions','wait_chat_messages','plan_chat_reply','send_chat_reply','send_chat_message','stop_chat_session','list_chat_groups','list_chat_personas','get_chat_learning','claim_chat_learning','submit_chat_learning','select_chat_expressions'])$('mcp-config').value+='\n[mcp_servers.tulpa.tools.'+tool+']\napproval_mode = "approve"\n';
-      for(const [flag,names] of [['chat_reactions',['react_to_chat_message']],['chat_images',['read_chat_image','list_chat_stickers','read_chat_sticker','note_chat_sticker']],['chat_sticker_send',['send_chat_sticker']],['chat_sticker_collect',['collect_chat_sticker']]])if(body[flag])for(const tool of names)$('mcp-config').value+='\n[mcp_servers.tulpa.tools.'+tool+']\napproval_mode = "approve"\n';
+      renderCodexConfig();
       $('mcp-secret').scrollIntoView({block:'nearest'});
       // Show the one-time credential before refreshing the surrounding lists.
       try{await refresh();}catch{createError='连接已创建，下方凭据可用；连接列表暂时刷新失败。';}
     }catch(error){createError=error.message;}
     finally{busy=false;renderService();}
   });};
+  function renderCodexConfig(){
+    if(!credential)return false;
+    const serverName=$('mcp-server-name').value,valid=/^[A-Za-z0-9_-]{1,64}$/.test(serverName);
+    $('mcp-install-codex').disabled=$('mcp-copy').disabled=!valid;
+    $('mcp-install-result').textContent=valid?'':'MCP 名称请填写 1–64 个英文字母、数字、下划线或短横线。';
+    $('mcp-copy').textContent='复制 Codex 配置';
+    if(!valid){$('mcp-config').value='';return false;}
+    const body=credential.scope;
+    $('mcp-config').value='[mcp_servers.'+serverName+']\nurl = '+JSON.stringify(credential.url)+'\nhttp_headers = { Authorization = '+JSON.stringify('Bearer '+credential.token)+' }\ntool_timeout_sec = 240\n';
+    for(const [flag,tool] of [['send','send_qq_message'],['manage','manage_qq_group']])if(body[flag])$('mcp-config').value+='\n[mcp_servers.'+serverName+'.tools.'+tool+']\napproval_mode = \"approve\"\n';
+    if(body.chat)for(const tool of ['start_chat_session','get_chat_session','list_chat_sessions','wait_chat_messages','plan_chat_reply','send_chat_reply','send_chat_message','stop_chat_session','list_chat_groups','list_chat_personas','get_chat_learning','claim_chat_learning','submit_chat_learning','select_chat_expressions'])$('mcp-config').value+='\n[mcp_servers.'+serverName+'.tools.'+tool+']\napproval_mode = "approve"\n';
+    for(const [flag,names] of [['chat_reactions',['react_to_chat_message']],['chat_images',['read_chat_image','list_chat_stickers','read_chat_sticker','note_chat_sticker']],['chat_sticker_send',['send_chat_sticker']],['chat_sticker_collect',['collect_chat_sticker']]])if(body[flag])for(const tool of names)$('mcp-config').value+='\n[mcp_servers.'+serverName+'.tools.'+tool+']\napproval_mode = "approve"\n';
+    return true;
+  }
+  $('mcp-server-name').oninput=renderCodexConfig;
   $('mcp-reveal').onclick=()=>{$('mcp-token').type=$('mcp-token').type==='password'?'text':'password';};
   $('mcp-test').onclick=()=>action(async()=>{if(!credential)return;const b=$('mcp-test');b.disabled=true;$('mcp-test-result').textContent='正在验证服务、授权和工具…';try{const r=await api('/test','POST',{token:credential.token});$('mcp-test-result').textContent='检测通过 · '+r.tools+' 个可用工具 · '+(r.onebot?'OneBot 群资料可用':'当前未启用 OneBot 群资料')+'。本次未调用模型。';}catch(e){$('mcp-test-result').textContent='检测未通过。';throw e;}finally{b.disabled=false;}});
-  $('mcp-install-codex').onclick=()=>action(async()=>{if(!credential)return;const b=$('mcp-install-codex');b.disabled=true;try{await api('/connections/'+encodeURIComponent(credential.id)+'/codex','POST',{token:credential.token});$('mcp-install-result').textContent='已写入本机 Codex。请在 Codex 的 MCP 设置中重新连接；若仍未出现，请重启 Codex。';}catch(e){b.disabled=false;throw e;}});
-  $('mcp-copy').onclick=()=>action(async()=>{await navigator.clipboard.writeText($('mcp-config').value);$('mcp-copy').textContent='已复制';});
+  $('mcp-install-codex').onclick=()=>action(async()=>{if(!renderCodexConfig())return;const b=$('mcp-install-codex'),name=$('mcp-server-name');b.disabled=true;name.disabled=true;try{await api('/connections/'+encodeURIComponent(credential.id)+'/codex','POST',{token:credential.token,server_name:name.value});$('mcp-install-result').textContent='已写入本机 Codex：'+name.value+'。请在 Codex 的 MCP 设置中重新连接；若仍未出现，请重启 Codex。';}catch(e){b.disabled=false;throw e;}finally{name.disabled=false;}});
+  $('mcp-copy').onclick=()=>action(async()=>{if(!renderCodexConfig())return;await navigator.clipboard.writeText($('mcp-config').value);$('mcp-copy').textContent='已复制';});
 })();
