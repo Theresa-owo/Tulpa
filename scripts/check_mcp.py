@@ -257,6 +257,24 @@ def main():
                 try:install_codex(settings['url'],second,home=home);raise AssertionError('Existing entry overwritten')
                 except ValueError:pass
                 assert config.read_bytes()==saved
+                # A second grant can use a separate name without replacing tulpa.
+                second_route='/api/mcp/connections/'+service.access.authorize(second)['id']+'/codex'
+                named={'token':second,'server_name':'tulpa_wechat'}
+                assert ui.post(second_route,json=named,headers=ui_headers).json()['changed']
+                assert not ui.post(second_route,json=named,headers=ui_headers).json()['changed']
+                parsed=tomllib.loads(config.read_text('utf-8'))
+                assert parsed['mcp_servers']['tulpa']['http_headers']['Authorization']=='Bearer '+first
+                assert parsed['mcp_servers']['tulpa_wechat']['http_headers']['Authorization']=='Bearer '+second
+                saved=config.read_bytes()
+                conflict=ui.post(route,json={'token':first,'server_name':'tulpa_wechat'},headers=ui_headers)
+                assert conflict.status_code==409 and 'tulpa_wechat' in conflict.json()['detail']
+                for invalid in ('','with space','nested.name','x]\n[other',None,12,'a'*65):
+                    assert ui.post(route,json={'token':first,'server_name':invalid},headers=ui_headers).status_code==409
+                assert ui.post(route,json={'token':first,'server_name':'valid','extra':True},headers=ui_headers).status_code==400
+                assert config.read_bytes()==saved
+                from chatlocal.mcp_connect import codex_config
+                entries=tomllib.loads(codex_config(settings['url'],'fixture',{'send':True,'chat':True,'chat_images':True},server_name='tulpa-qq_2'))['mcp_servers']
+                assert set(entries)=={'tulpa-qq_2'} and 'send_qq_message' in entries['tulpa-qq_2']['tools']
             asyncio.run(protocol(settings['url'],first,second,ui,service,store,folder))
             value=ui.get('/api/mcp').json();assert first not in json.dumps(value) and second not in json.dumps(value)
             assert value['recent'] and not any('content' in r for r in value['recent'])
