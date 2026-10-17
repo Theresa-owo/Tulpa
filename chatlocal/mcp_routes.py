@@ -223,14 +223,14 @@ def install_mcp_routes(app, store=None):
         except ValueError as exc:raise HTTPException(404,str(exc)) from None
 
     @app.get('/api/mcp/conversations')
-    def conversations(request: Request, query: str='', offset: int=0):
+    def conversations(request: Request, query: str='', offset: int=0, platform: str=''):
         local(request)
-        if len(query) > 100 or offset < 0:
+        if len(query) > 100 or offset < 0 or platform not in ('', 'qq', 'wechat'):
             raise HTTPException(400)
         with store.connect() as db:
             rows = [dict(r) for r in db.execute('''SELECT platform,conversation_id,max(conversation) name,count(*) count
-                FROM messages WHERE instr(lower(conversation),lower(?))>0
-                GROUP BY platform,conversation_id ORDER BY platform,name LIMIT 81 OFFSET ?''', (query, offset))]
+                FROM messages WHERE instr(lower(conversation),lower(?))>0 AND (?='' OR platform=?)
+                GROUP BY platform,conversation_id ORDER BY platform,name LIMIT 81 OFFSET ?''', (query, platform, platform, offset))]
         return dict(items=rows[:80], has_more=len(rows)>80, next_offset=offset+80)
 
     return service

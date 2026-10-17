@@ -24,7 +24,7 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
         if(failList&&requests.some(x=>x.path.endsWith('/connections')))return reply({detail:'fixture list unavailable'},503);
         return reply({...state,connections,recent:[],data_platforms:{qq:3,wechat:2},onebot_configured:false});
       }
-      if(url.pathname==='/api/mcp/conversations')return reply({items:[{platform:'qq',conversation_id:'111:group:222',name:'测试会话',count:3}],has_more:false,next_offset:80});
+      if(url.pathname==='/api/mcp/conversations')return reply({items:[{platform:'qq',conversation_id:'111:group:222',name:'测试会话',count:3},{platform:'wechat',conversation_id:'fixture@chatroom',name:'合成微信班级群',count:2}].filter(item=>item.name.includes(url.searchParams.get('query')||'')),has_more:false,next_offset:80});
       if(url.pathname==='/api/mcp/live-groups')return reply({items:[{platform:'qq',conversation_id:'111:group:444',name:'未导入的实时群',count:'OneBot'}]});
       if(url.pathname==='/api/desktop/preferences')return reply({background:false});
       if(url.pathname==='/api/desktop/status')return reply({owned:true});
@@ -69,7 +69,7 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
     const waitText=(id,text)=>page.waitForFunction(([id,text])=>document.getElementById(id).textContent.includes(text),[id,text]);
     async function setup(running=false){
       state={enabled:running,running,port:18777,url:'http://127.0.0.1:18777/mcp',error:''};requests=[];mode='ok';failList=false;delayCreate=false;sessions=[];connections=[];
-      await page.goto('http://127.0.0.1:39879/');await page.locator('#open-mcp').click();await page.locator('#mcp-chats input').waitFor();
+      await page.goto('http://127.0.0.1:39879/');await page.locator('#open-mcp').click();await page.locator('#mcp-chats input').first().waitFor();
       await page.locator('#mcp-name').fill('qqmcp');await page.locator('#mcp-all').check();
       await page.locator('#mcp-start').fill('2026-09-01');await page.locator('#mcp-end').fill('2026-10-03');
     }
@@ -129,6 +129,28 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
     await page.locator('#mcp-search').fill('实时');await waitText('mcp-chats','未导入的实时群');
     await page.locator('#mcp-chats input').check();await page.locator('#mcp-chat').check();await create();
     assert.deepEqual(requests[0].body.conversations,[['qq','111:group:444']]);
+    // Leaving the OneBot picker must restore imported WeChat conversations.
+    await setup(true);await page.locator('#mcp-all').uncheck();await page.locator('#mcp-live-groups').click();
+    await waitText('mcp-chats','未导入的实时群');
+    await page.locator('#mcp-qq').uncheck();
+    await waitText('mcp-chats','合成微信班级群');
+    assert.equal(await page.locator('#mcp-live-groups').isVisible(),false);
+    assert.equal(await page.locator('#mcp-chats label').count(),1);
+    assert.equal((await page.locator('#mcp-chats').textContent()).includes('qq ·'),false);
+    await page.locator('#mcp-wechat').uncheck();await waitText('mcp-chats','请先选择');
+    assert.equal(await page.locator('#mcp-chats input').count(),0);
+    await page.locator('#mcp-wechat').check();await page.locator('#mcp-search').fill('微信班级');
+    await waitText('mcp-chats','合成微信班级群');
+    assert.equal(await page.getByRole('checkbox',{name:'wechat · 合成微信班级群 (2)'}).isEnabled(),true);
+    await page.getByRole('checkbox',{name:'wechat · 合成微信班级群 (2)'}).check();
+    await create();assert.deepEqual(requests[0].body.conversations,[['wechat','fixture@chatroom']]);
+    assert.deepEqual(requests[0].body.platforms,['wechat']);
+    // Closing and reopening the dialog also leaves the cached OneBot list.
+    await setup(true);await page.locator('#mcp-all').uncheck();await page.locator('#mcp-live-groups').click();
+    await waitText('mcp-chats','未导入的实时群');
+    await page.locator('#mcp-search').fill('微信班级');await waitText('mcp-chats','没有匹配');
+    await page.locator('#mcp-close').click();await page.locator('#open-mcp').click();
+    await waitText('mcp-chats','合成微信班级群');assert.equal(await page.getByRole('checkbox',{name:'wechat · 合成微信班级群 (2)'}).isEnabled(),true);
     // Display literal persona, preserve expanded details across polling, stop one/all.
     learning={enabled:true,independence:'degraded',library:{checked_expressions:4,known_jargon:0,observing_jargon:17,last_completed_at:null},run:{completed_batches:0,buffered:8},calls_last_hour:2,hourly_call_budget:20,expression_count:4,jargon_count:17,
       expressions:[{id:'synthetic-expression',situation:'<img src=x onerror=alert(1)> 合成适用场景',style:'合成抽象表达方式；长文本自动换行。'.repeat(8),count:1,enabled:true,independence:'degraded',evidence_version:2,surface_form:'不然{对象}？'}],jargon:[{id:'synthetic-word',term:'云朵开机',meaning:'',enabled:true,is_jargon:false,count:1,independence:'degraded'}]};

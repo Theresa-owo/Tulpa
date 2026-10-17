@@ -111,7 +111,11 @@
   function selection(){ $('mcp-selection').textContent='已选择 '+selected.size+' 个会话（搜索不会清除已选）'; }
   async function chats(reset=true) {
     const version=++searchVersion;if(reset){page=0;$('mcp-chats').replaceChildren();}
-    const data=liveGroups?{items:liveGroups.filter(r=>r.name.toLowerCase().includes($('mcp-search').value.toLowerCase())),has_more:false,next_offset:0}:await api('/conversations?'+new URLSearchParams({query:$('mcp-search').value,offset:page}));if(version!==searchVersion)return;
+    const platforms=['qq','wechat'].filter(p=>$('mcp-'+p).checked);
+    $('mcp-live-groups').hidden=!platforms.includes('qq');
+    if(!platforms.length){$('mcp-chats').append(node('p','请先选择允许访问的平台。','mcp-muted'));$('mcp-more').hidden=true;selection();return;}
+    const data=liveGroups?{items:liveGroups.filter(r=>r.name.toLowerCase().includes($('mcp-search').value.toLowerCase())),has_more:false,next_offset:0}:await api('/conversations?'+new URLSearchParams({query:$('mcp-search').value,offset:page,platform:platforms.length===1?platforms[0]:''}));if(version!==searchVersion)return;
+    data.items=data.items.filter(item=>platforms.includes(item.platform));
     for(const item of data.items){const pair=[item.platform,item.conversation_id],key=JSON.stringify(pair);const label=node('label','');
       const input=document.createElement('input');input.type='checkbox';input.checked=selected.has(key);
       input.disabled=!$(item.platform==='qq'?'mcp-qq':'mcp-wechat').checked;
@@ -219,14 +223,15 @@
   function watchChats(){clearInterval(chatTimer);if(dialog.open||chatDialog.open)chatTimer=setInterval(()=>{if(!document.hidden)void refreshChats();},3000);}
 
   async function desktop(path,method='GET',body){const r=await fetch('/api/desktop/'+path,{method,cache:'no-store',headers:{'Content-Type':'application/json','X-ChatWeave-UI':'1'},body:body===undefined?undefined:JSON.stringify(body)});const data=await r.json();if(!r.ok)throw Error(data.detail||'设置操作失败。');return data;}
-  $('open-mcp').onclick=()=>{if(!dialog.open)dialog.showModal();watchChats();void refreshChats();action(async()=>{await refresh();await chats();const [prefs,status]=await Promise.all([desktop('preferences'),desktop('status')]);$('mcp-background-label').hidden=!status.owned;$('mcp-background').checked=prefs.background;});};
+  $('open-mcp').onclick=()=>{liveGroups=null;if(!dialog.open)dialog.showModal();watchChats();void refreshChats();action(async()=>{await refresh();await chats();const [prefs,status]=await Promise.all([desktop('preferences'),desktop('status')]);$('mcp-background-label').hidden=!status.owned;$('mcp-background').checked=prefs.background;});};
   $('mcp-close').onclick=()=>dialog.close();
   $('mcp-operation-history').addEventListener('toggle',()=>{if($('mcp-operation-history').open)action(async()=>{const data=await api('/operations');const host=$('mcp-operations');host.replaceChildren();for(const row of data.operations){const card=node('div','', 'mcp-connection');card.append(node('strong',row.connection_name+' · '+row.state),node('pre',row.summary),node('p',row.result.note||''));host.append(card);}if(!data.operations.length)host.append(node('p','暂无操作记录。'));});});
   function clearSecret(){credential=null;for(const id of ['mcp-token','mcp-config'])$(id).value='';$('mcp-token').type='password';$('mcp-secret').hidden=true;}
   dialog.addEventListener('close',clearSecret);
   dialog.addEventListener('close',watchChats);
   chatDialog.addEventListener('close',watchChats);
-  $('mcp-live-groups').onclick=()=>action(async()=>{liveGroups=(await api('/live-groups')).items;$('mcp-qq').checked=true;if(!current?.data_platforms?.wechat)$('mcp-wechat').checked=false;await chats();});
+  $('mcp-live-groups').textContent='从 OneBot 选择 QQ 群 · 无需导入';
+  $('mcp-live-groups').onclick=()=>action(async()=>{if(!$('mcp-qq').checked)return;const version=++searchVersion, data=await api('/live-groups');if(version!==searchVersion||!$('mcp-qq').checked)return;liveGroups=data.items;await chats();});
   $('mcp-chat-open').onclick=()=>{if(!chatDialog.open)chatDialog.showModal();watchChats();void refreshChats();};
   $('mcp-chat-close').onclick=()=>chatDialog.close();
   $('mcp-chat-refresh').onclick=()=>void refreshChats();
@@ -252,7 +257,7 @@
   $('mcp-background').onchange=()=>action(()=>desktop('preferences','PUT',{background:$('mcp-background').checked}));
   $('mcp-more').onclick=()=>action(()=>chats(false));
   $('mcp-search').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>action(()=>chats()),200);};
-  for(const p of ['qq','wechat'])$('mcp-'+p).onchange=()=>{for(const [key,pair] of selected)if(pair[0]===p&&!$('mcp-'+p).checked)selected.delete(key);action(()=>chats());};
+  for(const p of ['qq','wechat'])$('mcp-'+p).onchange=()=>{liveGroups=null;for(const [key,pair] of selected)if(pair[0]===p&&!$('mcp-'+p).checked)selected.delete(key);action(()=>chats());};
   $('mcp-all').onchange=()=>{$('mcp-picker').hidden=$('mcp-all').checked;};
   $('mcp-create-form').onsubmit=e=>{e.preventDefault();action(async()=>{
     if(busy)return;
