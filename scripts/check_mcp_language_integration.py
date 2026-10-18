@@ -71,12 +71,25 @@ def main():
                         event=dict(post_type='message',message_type='group',self_id=111,group_id=222,message_id=mid,
                             user_id=uid,time=int(time.time()),sender={'user_id':uid},message=[dict(type='text',data={'text':text})])|extra
                         tools.chat.receive(event)
+                    def resume_wait():
+                        read=call('wait_chat_messages',session_id=sid,timeout_seconds=1,quiet_seconds=0)
+                        if read['messages']:
+                            decision=call('plan_chat_reply',session_id=sid,batch_id=read['input_batch']['id'],
+                                idempotency_key='language-silent-'+read['input_batch']['id'],
+                                action='silence',intent='合成学习验收，本轮不发言',expressions=[])
+                            assert decision['state']=='SILENT',decision
+                            args=dict(decision['next_call']['arguments'],timeout_seconds=1,quiet_seconds=0)
+                            read=call('wait_chat_messages',**args)
+                        return read
                     # Old history, SELF, synthetic and foreign-group are never evidence.
                     receive(-1,'SELF',111);receive(-2,'摘要',synthetic=True);receive(-3,'旧历史',time=int(time.time())-86400)
                     receive(-4,'别群机密',group_id=223);assert size()==0
                     with patch.object(store,'connect',side_effect=AssertionError('historical DB accessed')):
                         for i in range(10):receive(-100-i,f'云朵开机 合成实时内容{i}')
                         assert size()==10
+                        # Learning yields to unread chat; explicitly decide silence
+                        # and acknowledge the batch before testing stage priority.
+                        resume_wait()
                         timer[0]+=29;assert call('claim_chat_learning',session_id=sid,context_id='new-host-context')['state']=='no_task'
                         timer[0]+=1
                         # Current reply work has priority; abandoned plans
@@ -91,11 +104,6 @@ def main():
                         with access.connect() as db:db.execute("DELETE FROM chat_turn_plans WHERE id='priority'")
                         assert t['stage']=='extract' and len(t['material']['messages'])==10
                         def submit(task,result,inv):return call('submit_chat_learning',session_id=sid,job_id=task['job_id'],lease=task['lease'],invocation_id=inv,result=result)
-                        def resume_wait():
-                            read=call('wait_chat_messages',session_id=sid,timeout_seconds=1,quiet_seconds=0)
-                            if read['messages']:
-                                read=call('wait_chat_messages',session_id=sid,timeout_seconds=1,quiet_seconds=0,acknowledge_through_id=read['read_through_id'])
-                            return read
                         ids=[m['source_id'] for m in t['material']['messages']]
                         result=dict(expressions=[expression_fixture(t['material']['messages'][i],'情境'+str(i),'抽象方式'+str(i)) for i in range(3)])
                         bad=json.loads(json.dumps(result));bad['expressions'][1]['surface_form']='{全部内容}'
