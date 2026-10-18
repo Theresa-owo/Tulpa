@@ -227,7 +227,8 @@ def main():
         with TestClient(app) as ui:
             assert not ui.get('/api/mcp').json()['enabled']
             from chatlocal.onebot import Client
-            with patch.object(Client,'login',return_value='111'), patch.object(Client,'call') as catalog:
+            with patch.object(Client,'login',return_value='111'), patch.object(Client,'call') as catalog, \
+                 patch('chatlocal.onebot.configuration',return_value={'url':'http://127.0.0.1:9','token':'catalog-fixture'}):
                 catalog.return_value=[dict(group_id=222,group_name='Current group'),dict(group_id='invalid')]
                 groups=ui.get('/api/mcp/live-groups').json()['items']
                 catalog.assert_called_once_with('get_group_list',{'no_cache':True})
