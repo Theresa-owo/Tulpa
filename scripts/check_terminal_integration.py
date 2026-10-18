@@ -4,7 +4,6 @@ Only SnowLuma is replaced by isolated HTTP/WS fixtures. No QQ messages or model
 calls are made. This catches API-shape mismatches that a fake UI client cannot.
 """
 import asyncio
-from check_fixture_support import management_http
 import json
 from pathlib import Path
 import socket
@@ -16,6 +15,8 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import management_http
 import check_terminal_backend as backend
 from chatlocal.terminal_client import TerminalClient
 from chatlocal.tui import model

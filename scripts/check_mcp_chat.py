@@ -1,5 +1,4 @@
 """Persistent chat acceptance: real MCP HTTP + isolated OneBot, never real QQ."""
-from check_fixture_support import isolated_env
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -21,6 +20,7 @@ from websockets.exceptions import ConnectionClosed
 ssl.create_default_context()
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 ROOT=Path(sys.argv[sys.argv.index('--package')+1]).resolve() if '--package' in sys.argv else Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from fastapi import FastAPI

@@ -1,5 +1,4 @@
 """Functional acceptance: isolated OneBot, MCP tools, local images. No LLM/QQ writes."""
-from check_fixture_support import isolated_env
 import asyncio
 import base64
 from copy import deepcopy
@@ -18,6 +17,7 @@ import warnings
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_reactions import ReactionBot, Events, eventually, ROOT
 from chatlocal.mcp_routes import install_mcp_routes
 from chatlocal.store import Store

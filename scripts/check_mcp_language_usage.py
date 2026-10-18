@@ -1,5 +1,4 @@
 """Mandatory expression choice through real MCP HTTP; fake QQ, no LLM calls."""
-from check_fixture_support import isolated_env
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
@@ -14,6 +13,8 @@ import time
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).parent))
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_reactions import ReactionBot, Events, eventually, ROOT
 from check_mcp_language_learning import ground_fixture_rows
 from chatlocal.store import Store

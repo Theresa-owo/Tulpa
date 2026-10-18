@@ -1,5 +1,4 @@
 """Linux terminal acceptance: real local HTTP/WS fixtures, no QQ or paid models."""
-from check_fixture_support import isolated_env
 import json
 import os
 from pathlib import Path
@@ -16,6 +15,8 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 sys.path.insert(0, str(ROOT/'scripts'))
 from fastapi.testclient import TestClient
 from check_mcp_chat import Events

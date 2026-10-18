@@ -1,5 +1,4 @@
 """Real localhost HTTP/WS against synthetic SnowLuma files, never personal QQ."""
-from check_fixture_support import isolated_env
 import json
 import sys
 import socket
@@ -12,6 +11,8 @@ from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from websockets.sync.server import serve

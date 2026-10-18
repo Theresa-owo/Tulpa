@@ -3,7 +3,6 @@
 No real QQ calls, private data, external models or environment credentials.
 Use --package <portable root> to execute that release's actual modules/runtime.
 """
-from check_fixture_support import isolated_env
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
@@ -18,6 +17,7 @@ import time
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_chat import Events, OneBot, eventually, ROOT
 import httpx
 from fastapi import FastAPI

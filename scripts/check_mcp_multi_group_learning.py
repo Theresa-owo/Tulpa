@@ -3,7 +3,6 @@
 No real QQ writes, history access or model requests. --package checks an installed
 runtime with temporary state, using the same fixtures as the existing MCP suite.
 """
-from check_fixture_support import isolated_env
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer
@@ -17,6 +16,7 @@ import time
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_language_learning import Clock,ROOT,expression_fixture,review_fixture,jargon_fixture
 from check_mcp_reactions import ReactionBot,Events
 from chatlocal.mcp_language_store import LanguageStore,LearningError,digest

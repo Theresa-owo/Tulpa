@@ -20,10 +20,11 @@ SUBPROCESS_ENV={k:os.environ[k] for k in ('SYSTEMROOT','WINDIR') if k in os.envi
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import management_http
 sys.path.insert(0, str(ROOT/'scripts'))
 import check_terminal_backend as backend
 from check_mcp import client as mcp_client
-from check_fixture_support import management_http
 from chatlocal.mcp_access import MCPAccess, AccessDenied
 from chatlocal.mcp_qq import QQExtensions
 from chatlocal.onebot import Client, OneBotError

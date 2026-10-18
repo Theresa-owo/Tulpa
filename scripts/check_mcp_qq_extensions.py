@@ -1,5 +1,4 @@
 """SL extensions: real MCP/HTTP/WS against an isolated QQ protocol fixture."""
-from check_fixture_support import isolated_env
 import asyncio
 import base64
 from copy import deepcopy
@@ -18,6 +17,7 @@ from unittest.mock import patch
 import wave
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_chat import Events, eventually, ROOT
 from check_mcp_chat_media import fixture_image
 from chatlocal.mcp_qq_permissions import QQ_FLAGS

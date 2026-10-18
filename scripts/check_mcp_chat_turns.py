@@ -3,7 +3,6 @@
 Unlike adapter regression suites this exercises the mandatory plan gate, native
 adapters, durable queue, stop/revoke and service restart without a protocol seam.
 """
-from check_fixture_support import isolated_env
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
@@ -20,6 +19,8 @@ import time
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).parent))
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_reactions import ReactionBot, Events, eventually, ROOT
 from chatlocal.store import Store
 from chatlocal.mcp_routes import install_mcp_routes

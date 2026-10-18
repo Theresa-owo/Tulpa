@@ -1,5 +1,4 @@
 """Local pixels and bounded DNS, using synthetic files and isolated OneBot only."""
-from check_fixture_support import isolated_env
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import hashlib
@@ -17,6 +16,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_chat_enrichment import DetailBot, Events, eventually, ROOT
 from check_mcp_chat_media import fixture_image, dns_response
 from chatlocal.media import cache_image

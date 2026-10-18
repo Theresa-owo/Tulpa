@@ -1,5 +1,4 @@
 """Save EXE OneBot settings without an LLM, then use real HTTP MCP and OneBot fixtures."""
-from check_fixture_support import isolated_env
 import asyncio
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -12,6 +11,8 @@ from unittest.mock import patch
 
 ROOT=Path(sys.argv[sys.argv.index('--package')+1]).resolve() if '--package' in sys.argv else Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from chatlocal.store import Store

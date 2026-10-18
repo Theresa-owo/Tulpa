@@ -3,7 +3,6 @@
 --package uses that installation's Python modules with entirely temporary data.
 Optional --report writes only synthetic acceptance evidence, never credentials.
 """
-from check_fixture_support import isolated_env
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
@@ -18,6 +17,7 @@ import time
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_chat_targets import TargetBot, text_segment
 from check_mcp_chat import Events, eventually, ROOT
 import httpx

@@ -1,5 +1,4 @@
 """Direct MCP write grants: isolated HTTP OneBot; never touches a real QQ account."""
-from check_fixture_support import isolated_env
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -13,6 +12,8 @@ from unittest.mock import patch
 
 ROOT=Path(sys.argv[sys.argv.index('--package')+1]).resolve() if '--package' in sys.argv else Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from chatlocal.store import Store

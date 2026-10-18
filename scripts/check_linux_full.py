@@ -1,5 +1,4 @@
 """Full-port acceptance with isolated stores, encrypted native pages and local children."""
-from check_fixture_support import isolated_env
 import hashlib
 import json
 import os
@@ -16,6 +15,8 @@ from types import SimpleNamespace
 
 ROOT=Path(__file__).resolve().parents[1]
 sys.path[:0]=[str(ROOT),str(ROOT/'scripts'),str(ROOT/'tools/qq-reader'),str(ROOT/'tools/wechat-reader')]
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from chatlocal.store import Store
 from chatlocal.terminal_server import create_app
 from chatlocal.terminal_client import TerminalClient

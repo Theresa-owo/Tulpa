@@ -1,5 +1,4 @@
 """Live stickers: isolated real HTTP/WS MCP, no real QQ or internal model."""
-from check_fixture_support import isolated_env
 import asyncio
 import base64
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +14,7 @@ import time
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_chat import Events, OneBot, eventually, ROOT
 from fastapi import FastAPI
 from fastapi.testclient import TestClient

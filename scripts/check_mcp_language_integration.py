@@ -1,5 +1,4 @@
 """Real MCP wire / local UI / WS synthetic integration; no QQ or LLM writes."""
-from check_fixture_support import isolated_env
 import asyncio
 from http.server import ThreadingHTTPServer
 import json
@@ -12,6 +11,8 @@ import time
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).parent))
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_reactions import ReactionBot, Events, eventually, ROOT
 from check_mcp_language_learning import expression_fixture,review_fixture
 from chatlocal.store import Store

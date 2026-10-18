@@ -1,5 +1,4 @@
 """Generated-image intake: real MCP/OneBot wire, isolated data, no live QQ."""
-from check_fixture_support import isolated_env
 import asyncio
 import base64
 from concurrent.futures import ThreadPoolExecutor
@@ -19,6 +18,7 @@ from unittest.mock import patch
 SUBPROCESS_ENV={k:os.environ[k] for k in ('SYSTEMROOT','WINDIR') if k in os.environ}
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_chat_media import StickerBot, fixture_image
 from check_mcp_chat import Events, eventually, ROOT
 from import_chat_image import connection, image_bytes, UploadError

@@ -4,7 +4,6 @@ The simulated host follows returned next_call links; it never enables learning
 or manually chooses a learning stage. A fake clock drives batch/retry deadlines.
 All network targets are loopback fixtures; model results are deterministic.
 """
-from check_fixture_support import isolated_env
 from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer
 import asyncio
@@ -25,6 +24,8 @@ from mcp.client.streamable_http import streamable_http_client
 from PIL import Image
 
 sys.path.insert(0,str(Path(__file__).parent))
+sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_reactions import ReactionBot,Events,ROOT
 from check_mcp_chat_enrichment import DetailBot, text
 from check_mcp_chat_media import fixture_image

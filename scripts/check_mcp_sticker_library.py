@@ -1,5 +1,4 @@
 """Isolated sticker lifecycle/permission/cost checks. Only loopback mock OneBot."""
-from check_fixture_support import isolated_env
 from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer
 import hashlib
@@ -15,6 +14,7 @@ import time
 from unittest.mock import patch
 
 sys.path.insert(0,str(Path(__file__).resolve().parent))
+from check_fixture_support import isolated_env
 from check_mcp_chat_media import Events, StickerBot, eventually, ROOT
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
