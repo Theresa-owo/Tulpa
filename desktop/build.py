@@ -44,6 +44,7 @@ def build_icon():
 def build(no_zip=False,qa=False,output=None,lite=False):
     if not qa and subprocess.check_output(['git','status','--porcelain'],cwd=ROOT,text=True).strip():
         raise RuntimeError('正式打包前请先提交 Git 修改；测试构建可用 --qa --no-zip。')
+    checkpoint=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()
     out=(Path(output) if output else ROOT/'release'/(VERSION+'-mcp' if lite else VERSION)/'Tulpa').resolve()
     assert out.is_relative_to((ROOT/'release').resolve()) and out.name=='Tulpa'
     out.mkdir(parents=True,exist_ok=True)
@@ -201,7 +202,10 @@ def build(no_zip=False,qa=False,output=None,lite=False):
     # Only aggregate versions/hashes. Never environment variables or source data.
     import importlib.metadata
     dependencies=lite_deps if lite else sorted([dict(name=d.metadata['Name'],version=d.version) for d in importlib.metadata.distributions() if d.metadata['Name']],key=lambda d:d['name'].lower())
-    manifest=dict(product='Tulpa',version=VERSION,platform='windows-x64',checkpoint=subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),
+    if not qa and (subprocess.check_output(['git','status','--porcelain'],cwd=ROOT,text=True).strip() or
+                   subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip()!=checkpoint):
+        raise RuntimeError('源码在构建期间改变；请在同一干净提交重新打包，未生成发布归档。')
+    manifest=dict(product='Tulpa',version=VERSION,platform='windows-x64',checkpoint=checkpoint,
                   edition='mcp' if lite else 'full',assets=HASHES,dependencies=dependencies,files=sorted(entries),
                   file_sha256={rel:digest(out/rel) for rel in sorted(entries)})
     write('build-manifest.json',json.dumps(manifest,ensure_ascii=False,indent=2))

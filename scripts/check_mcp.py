@@ -313,8 +313,14 @@ def main():
             except ValueError:pass
             asyncio.run(optional_tools(settings['url'],service,store,folder))
             # Restart reuses durable settings and grants without widening scope.
-            service.stop();service.start()
-            assert service.status()['running'] and service.access.authorize(second)['id']==gid
+            with httpx.Client(trust_env=False) as keepalive:
+                if not hasattr(socket,'SO_EXCLUSIVEADDRUSE'):
+                    # Keep a client open so server shutdown reliably creates
+                    # POSIX TIME_WAIT; repeated starts must not report port theft.
+                    assert keepalive.get(settings['url']).status_code==401
+                service.stop();service.start()
+                assert service.status()['running'],service.status()
+                assert service.access.authorize(second)['id']==gid
             assert logging_state()==web_logging, 'MCP restart overwrote WebUI logging'
             assert ui.put('/api/mcp',json=dict(enabled=False,port=port),headers=ui_headers).json()['running'] is False
         assert not service.thread

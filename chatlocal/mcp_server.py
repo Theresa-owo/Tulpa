@@ -197,6 +197,11 @@ class MCPService:
             listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
                 listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            else:
+                # POSIX keeps accepted connections in TIME_WAIT after shutdown.
+                # Reuse our stopped endpoint, without SO_REUSEPORT: a second
+                # active listener still cannot bind the same loopback address.
+                listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             try:
                 listener.bind(('127.0.0.1', setting['port']))
                 listener.listen(128)
