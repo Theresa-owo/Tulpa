@@ -13,7 +13,7 @@ jobs:
       matrix:
         runner: [ubuntu-latest, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 40
+    timeout-minutes: 60
     env:
       PYTHONUTF8: '1'
     steps:
@@ -38,7 +38,7 @@ jobs:
           .venv/bin/python scripts/check_linux_components.py
   isolated-checks:
     runs-on: windows-latest
-    timeout-minutes: 25
+    timeout-minutes: 40
     env:
       PYTHONUTF8: '1'
       GRADIO_ANALYTICS_ENABLED: 'False'
