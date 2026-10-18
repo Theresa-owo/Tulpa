@@ -1,4 +1,4 @@
-Tulpa 0.5.5 Linux 测试源码包
+Tulpa 0.5.6 Linux 终端源码包
 
 解压后进入 Tulpa 目录，准备 Python 3.13 或 uv，运行：
 
@@ -21,7 +21,8 @@ MCP、SL、Docker 托管和模型配置默认未启用，需要测试者自行�
 本包含默认人格和配置模板，不含账号、聊天记录、记忆、授权、Token、API Key、
 SL/VNC 密码、虚拟环境、缓存、模型、Docker 镜像或数据卷。
 首次启动会创建空数据库和本实例的管理凭据。
-当前本机实测为 Linux ARM64；包含 x86_64 适配，但本次未在 x86_64 主机实测。
+0.5.6 验证范围：本机 WSL2 Ubuntu x86_64 启动与隔离回归，GitHub CI x86_64 / ARM64。
+未在本次发行验收中进行真实账号扫码、发言或模型学习质量测试。
 
 安装与使用：README.md、doc/LINUX_TERMINAL.md
 外部 Agent：doc/LINUX_AGENT_SETUP.md

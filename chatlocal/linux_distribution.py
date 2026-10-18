@@ -29,7 +29,7 @@ LICENSES = frozenset({
 })
 # These helpers build/repair the upstream desktop release or require Gradio.
 EXCLUDED_SCRIPTS = frozenset({
-    'check_agent_ui.py', 'check_ui.py', 'check_development_readers.py',
+    'build_linux_release.py', 'check_agent_ui.py', 'check_ui.py', 'check_development_readers.py',
     'check_reader_runtime.py', 'check_publication.py', 'check_upgrade.py',
     'check_qq_source_fix.py', 'fix_qq_source.py', 'package_qq_source_fix.py',
     'prepare_reader_runtime.py', 'upgrade_installation.py',

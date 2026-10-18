@@ -28,6 +28,9 @@ def main():
                 assert all(item['platform']==platform for item in first['items']+second['items'])
             result=client.get('/api/mcp/conversations',params={'platform':'wechat','query':'联系人备注'}).json()
             assert [item['conversation_id'] for item in result['items']]==['unnamed@chatroom']
+            for platform in ('qq','wechat'):
+                ids=client.get('/api/mcp/conversations',params={'platform':platform,'query':'-81'}).json()['items']
+                assert [item['conversation_id'] for item in ids]==[platform+'-81']
             assert client.get('/api/mcp/conversations?platform=invalid').status_code==400
             assert client.get('/api/mcp/conversations').json()['items'][0]['platform']=='qq'
     print('PASS: platform filtering before pagination, search and validation')

@@ -1,4 +1,5 @@
 """Persistent chat acceptance: real MCP HTTP + isolated OneBot, never real QQ."""
+from check_fixture_support import isolated_env
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -174,7 +175,7 @@ def main():
     upstream=ThreadingHTTPServer(('127.0.0.1',0),OneBot)
     threading.Thread(target=upstream.serve_forever,daemon=True).start()
     try:
-        with tempfile.TemporaryDirectory(dir=ROOT/'.tmp',prefix='mcp-chat-') as tmp,patch.dict('os.environ',{},clear=True):
+        with tempfile.TemporaryDirectory(dir=ROOT/'.tmp',prefix='mcp-chat-') as tmp,patch.dict('os.environ',isolated_env(),clear=True):
             folder=Path(tmp);store=Store(folder/'chats.sqlite3');serial=0
             persona_dir=folder/'personas';persona_dir.mkdir()
             for name in ('little_whale.md','little_whale.source.json','behavior.md'):

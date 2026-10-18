@@ -3,13 +3,13 @@
 # Tulpa · Linux 终端版
 
 把 QQ / 微信资料接入外部 Agent，也让它带着自定义人格参与 QQ 群聊。
-这是基于 [Tulpa](https://github.com/fumingyang2004/Tulpa) 0.5.5 的 Linux 移植测试版，
+这是 [Tulpa](https://github.com/fumingyang2004/Tulpa) 0.5.6 的 Linux 终端源码发行版，
 包含 CLI、终端界面、MCP 服务、资料检索、模型对话和 SnowLuma（SL）托管。
 只使用外部 Agent 时，无需在 Tulpa 里填写模型 API Key。
 
 ## 安装与启动
 
-需要 Linux、Python 3.13 或 `uv`，首次安装依赖需要联网。解压测试包，进入 `Tulpa` 目录后运行：
+需要 Linux、Python 3.13 或 `uv`，首次安装依赖需要联网。解压发行包，进入 `Tulpa` 目录后运行：
 
 ```sh
 ./tulpa
@@ -68,6 +68,7 @@ Python 方式需要系统提供 `python3.13` 及其 `venv` / `ensurepip`；使�
 Tulpa 准备会话后会显示「等待 Agent」；外部 Agent 退出或停止执行后，Tulpa 不会自行继续推理。
 外部 Agent 生成的图片可用 `import_chat_image` 导入，再经 Tulpa 的发送计划交给 SL 发到 QQ。
 本机文件上传脚本及调用流程见 [发送生成的图片](doc/LINUX_AGENT_SETUP.md#发送生成的图片)。
+与 Windows 共用 MCP 实现：等待与补读可交付当前消息的图片、引用和转发材料，复用经内容校验的图片；学习提交保留回执并及时交接新消息。
 实时聊天也支持授权好友私聊。语音、视频、文件发送，以及撤回、转发、戳戳、空间、好友、
 群相册和扩展群管理见 [SL 扩展工具](doc/SL_TOOLS.md)；新增独立权限通过 CLI 或管理 API 开启。
 
@@ -88,11 +89,12 @@ sh setup-linux.sh --full
 
 ## 测试范围与数据
 
-当前实机验证环境为 Linux ARM64；代码包含 x86_64 适配，但本次发行没有在 x86_64 主机重新实测。
+0.5.6 的验证分为本机 WSL2 / Ubuntu x86_64 安装启动、隔离接口回归，以及 GitHub Actions 的 x86_64 / ARM64 测试。
+这些检查不代表在所有 Linux 发行版、QQ / 微信版本上验证了真实账号读取；本次不进行真实 QQ 发言或扫码。
 原生客户端版本、权限和密钥会影响读取能力，ARM64 不提供未经验证的主动启动取钥。
-详细结果见 [Linux 验收记录](doc/LINUX_ACCEPTANCE.md) 与 [Docker 验收记录](doc/DOCKER_ACCEPTANCE.md)。
+早期移植的真实环境结果见 [Linux 验收记录](doc/LINUX_ACCEPTANCE.md) 与 [Docker 验收记录](doc/DOCKER_ACCEPTANCE.md)。
 
-干净测试包没有账号、聊天记录、记忆、API Key、MCP 授权、SL/VNC 密码、运行环境或缓存。
+干净发行包没有账号、聊天记录、记忆、API Key、MCP 授权、SL/VNC 密码、运行环境或缓存。
 首次运行会创建本实例的数据目录和管理凭据。资料保存在本机，但发送给外部 Agent 或模型服务的内容
 仍受所用服务的数据处理规则约束。MCP 发送与群管理是独立的持续授权，勾选后调用直接执行。
 使用过的目录含私人数据，不要直接压缩发给别人。

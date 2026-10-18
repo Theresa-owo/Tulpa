@@ -1,4 +1,5 @@
 """Isolated sticker lifecycle/permission/cost checks. Only loopback mock OneBot."""
+from check_fixture_support import isolated_env
 from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer
 import hashlib
@@ -37,7 +38,7 @@ def main():
     threading.Thread(target=upstream.serve_forever,daemon=True).start()
     metrics={}
     try:
-        with tempfile.TemporaryDirectory(dir=ROOT/'.tmp',prefix='sticker-library-') as tmp,patch.dict('os.environ',{},clear=True):
+        with tempfile.TemporaryDirectory(dir=ROOT/'.tmp',prefix='sticker-library-') as tmp,patch.dict('os.environ',isolated_env(),clear=True):
             folder=Path(tmp);store=Store(folder/'chats.sqlite3')
             (folder/'.env').write_text(f'REPLY_ONEBOT_URL=http://127.0.0.1:{upstream.server_port}\nREPLY_ONEBOT_WS_URL=ws://127.0.0.1:{events.port}\nREPLY_ONEBOT_WS_TOKEN=event-fixture\n','utf-8')
             app=FastAPI();svc=install_mcp_routes(app,store);access=svc.access;tools=svc.tools

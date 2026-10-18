@@ -18,7 +18,8 @@ CHECKS=('reader_install','linux_distribution','linux_full','terminal_backend','t
         'import_batches','chat_browser','overview','qq_account_diagnostics','identity','people',
         'mcp_chat_media','mcp_image_import','mcp_qq_extensions','mcp_grant_edit','mcp_chat_targets','mcp_downloads','mcp_onebot','mcp_actions','mcp_auto_learning',
         'mcp_sticker_library','mcp_expression_evidence','mcp_language_integration','mcp_jargon_matching',
-        'mcp_jargon_pipeline','mcp_multi_group_learning')
+        'mcp_jargon_pipeline','mcp_multi_group_learning',
+        'mcp_picker','image_identity','mcp_chat_enrichment','mcp_chat_output','mcp_image_reuse','reply_timing','antigravity_reply_timing')
 
 
 def main():

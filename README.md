@@ -84,12 +84,14 @@ Tulpa 在本机整理聊天、图片和文件，让 Agent 按你授权的范围�
 
 ## 下载
 
-| 版本 | 适合你，如果你想… | v0.5.5 下载 |
+| 版本 | 适合你，如果你想… | v0.5.6 下载 |
 | --- | --- | --- |
-| **MCP 轻量版** | 使用已有 Agent 查资料或参与 QQ 群聊 | [下载 ZIP](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.5/Tulpa-MCP-0.5.5-win-x64.zip) |
-| **完整版** | 在 Tulpa 内提问，使用回复、记忆和工作区；也能接外部 Agent | [下载 ZIP](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.5/Tulpa-0.5.5-win-x64.zip) |
+| **MCP 轻量版** | 使用已有 Agent 查资料或参与 QQ 群聊 | [下载 ZIP](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.6/Tulpa-MCP-0.5.6-win-x64.zip) |
+| **完整版** | 在 Tulpa 内提问，使用回复、记忆和工作区；也能接外部 Agent | [下载 ZIP](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.6/Tulpa-0.5.6-win-x64.zip) |
 
-两版都有 Python 和相同的 MCP 能力。完整版内置 Harness、本地 OCR / 语音 / Office 解析与固定 WebView2；轻量版使用系统 WebView2 Evergreen Runtime，语音模型按需安装。[版本区别](doc/MCP_LITE.md) · [最新发布](https://github.com/fumingyang2004/Tulpa/releases/latest) · [0.5.5 更新说明](doc/releases/0.5.5.md)
+| **Linux 终端版** | Linux x86_64 / ARM64，CLI/TUI、MCP 及可选内置模型 | [下载 tar.gz](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.6/Tulpa-0.5.6-linux.tar.gz) |
+
+Windows 两版都有 Python 和相同的 MCP 能力。完整版内置 Harness、本地 OCR / 语音 / Office 解析与固定 WebView2；轻量版使用系统 WebView2 Evergreen Runtime，语音模型按需安装。[版本区别](doc/MCP_LITE.md) · [最新发布](https://github.com/fumingyang2004/Tulpa/releases/latest) · [0.5.6 更新说明](doc/releases/0.5.6.md)
 
 需要 **.NET Framework 4.8**。下载 ZIP 后完整解压到可写目录，打开 `Tulpa/Tulpa.exe`；不要从压缩包直接运行。**`Source code` 不是安装包，两版不要混装。** QQ / 微信客户端、模型服务及可选 OneBot 服务需自行准备。
 
@@ -108,7 +110,7 @@ Tulpa 在本机整理聊天、图片和文件，让 Agent 按你授权的范围�
 **无需先导入整库历史。** 这条路径直接接收 OneBot 实时事件。
 
 1. 启动 QQ 和 Tulpa；载入自行下载的 SnowLuma 文件夹并同意自动配置，或导入已有 OneBot 连接。持续群聊需要 **HTTP + 正向 WebSocket**。[连接教程](doc/SNOWLUMA_SETUP.md)
-2. 在 **连接外部 Agent**（或 **外部 Agent / MCP**）选择 QQ，点击 **从 OneBot 选择群 · 无需导入**，只选测试群；截止日期留空以接收未来消息。
+2. 在 **连接外部 Agent**（或 **外部 Agent / MCP**）选择 QQ，在会话来源选择 **QQ 当前群聊 · 无需导入**，只选测试群；截止日期留空以接收未来消息。
 3. 开放持续群聊和发送权限，按需加看图、表情发送或收藏。创建连接、检测工具，再按 [Agent 教程](doc/AGENT_SETUP.md)配置并重连客户端。
 4. 在外部 Agent 的**专用对话**中使用上面的水群示例。想换龙娘，选择 `dragon_girl`。新人格放进当前安装目录的 `chatlocal/prompts/mcp_chat/`，重新列出即可发现。
 

@@ -1,4 +1,5 @@
 """Real localhost HTTP/WS against synthetic SnowLuma files, never personal QQ."""
+from check_fixture_support import isolated_env
 import json
 import sys
 import socket
@@ -67,7 +68,7 @@ def main():
     http=ThreadingHTTPServer(('127.0.0.1',0),HTTP)
     thread=threading.Thread(target=http.serve_forever,daemon=True);thread.start();events=Events()
     try:
-        with tempfile.TemporaryDirectory(dir=ROOT/'.tmp',prefix='snow-setup-') as name,patch.dict('os.environ',{},clear=True):
+        with tempfile.TemporaryDirectory(dir=ROOT/'.tmp',prefix='snow-setup-') as name,patch.dict('os.environ',isolated_env(),clear=True):
             root=Path(name);snow=root/'SnowLuma';product=root/'Tulpa';product.mkdir();snow.mkdir()
             write(snow/'package.json',dict(name='@snowluma/runtime',version='1.14.20'));(snow/'index.mjs').write_text('// fixture')
             h=dict(name='http-fixture',host='127.0.0.1',port=http.server_port,path='/custom/api',accessToken=HTTP.token)

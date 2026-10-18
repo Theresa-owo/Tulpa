@@ -3,6 +3,7 @@
 No real QQ calls, private data, external models or environment credentials.
 Use --package <portable root> to execute that release's actual modules/runtime.
 """
+from check_fixture_support import isolated_env
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
@@ -92,7 +93,7 @@ def main():
     events=Events();upstream=ThreadingHTTPServer(('127.0.0.1',0),TargetBot)
     threading.Thread(target=upstream.serve_forever,daemon=True).start()
     try:
-        with tempfile.TemporaryDirectory(prefix='tulpa-chat-targets-') as tmp,patch.dict('os.environ',{},clear=True):
+        with tempfile.TemporaryDirectory(prefix='tulpa-chat-targets-') as tmp,patch.dict('os.environ',isolated_env(),clear=True):
             folder=Path(tmp);store=Store(folder/'chats.sqlite3')
             (folder/'.env').write_text(f'REPLY_ONEBOT_URL=http://127.0.0.1:{upstream.server_port}\nREPLY_ONEBOT_WS_URL=ws://127.0.0.1:{events.port}\nREPLY_ONEBOT_WS_TOKEN=event-fixture\n','utf-8')
             with patch('chatlocal.onebot.ROOT',folder),patch('chatlocal.message_sender.ROOT',folder):

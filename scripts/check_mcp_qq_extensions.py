@@ -1,4 +1,5 @@
 """SL extensions: real MCP/HTTP/WS against an isolated QQ protocol fixture."""
+from check_fixture_support import isolated_env
 import asyncio
 import base64
 from copy import deepcopy
@@ -170,7 +171,7 @@ def main():
     events=Events();upstream=ThreadingHTTPServer(('127.0.0.1',0),Bot)
     threading.Thread(target=upstream.serve_forever,daemon=True).start();checks=[]
     try:
-        with tempfile.TemporaryDirectory(prefix='tulpa-sl-extensions-') as tmp,patch.dict('os.environ',{},clear=True):
+        with tempfile.TemporaryDirectory(prefix='tulpa-sl-extensions-') as tmp,patch.dict('os.environ',isolated_env(),clear=True):
             root=Path(tmp)
             (root/'.env').write_text(f'REPLY_ONEBOT_URL=http://127.0.0.1:{upstream.server_port}\nREPLY_ONEBOT_WS_URL=ws://127.0.0.1:{events.port}\nREPLY_ONEBOT_WS_TOKEN=event-fixture\n')
             with patch('chatlocal.onebot.ROOT',root),patch('chatlocal.message_sender.ROOT',root):

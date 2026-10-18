@@ -1,4 +1,5 @@
 """Isolated desktop settings, write-only credentials and relative asset routing."""
+from check_fixture_support import isolated_env
 import json
 from pathlib import Path
 import sys
@@ -12,7 +13,7 @@ from chatlocal.desktop_routes import install_desktop_routes
 
 
 def main():
-    with tempfile.TemporaryDirectory(dir=ROOT/'.tmp',prefix='desktop-settings-') as name,patch.dict('os.environ',{},clear=True):
+    with tempfile.TemporaryDirectory(dir=ROOT/'.tmp',prefix='desktop-settings-') as name,patch.dict('os.environ',isolated_env(),clear=True):
         root=Path(name);(root/'.tmp').mkdir();app=FastAPI();install_desktop_routes(app,root);c=TestClient(app)
         assert c.get('/api/ui-preferences').json()==dict(show_reasoning=True)
         assert c.put('/api/ui-preferences',json=dict(show_reasoning=False)).status_code==403

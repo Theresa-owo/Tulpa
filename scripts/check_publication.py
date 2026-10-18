@@ -9,6 +9,7 @@ import json
 from pathlib import Path, PurePosixPath
 import re
 import subprocess
+import tarfile
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -86,6 +87,8 @@ def source_check():
 
 
 def archive_check(path):
+    if path.name.endswith('.tar.gz'):
+        return linux_archive_check(path)
     errors = []
     with zipfile.ZipFile(path) as z:
         names = [info.filename for info in z.infolist() if not info.is_dir()]
@@ -132,6 +135,39 @@ def archive_check(path):
         sha = hashlib.file_digest(stream, 'sha256').hexdigest()
     return dict(archive=path.name, version=manifest['version'], commit=head, files=len(names),
                 bytes=path.stat().st_size, sha256=sha, archive_scan='passed', crc='passed')
+
+
+def linux_archive_check(path):
+    """Validate the actual Linux deliverable, including modes and every byte."""
+    errors = []
+    with tarfile.open(path, 'r:gz') as archive:
+        members = archive.getmembers()
+        names = [m.name for m in members]
+        if len(names) != len(set(names)) or any(not m.isfile() or not m.name.startswith('Tulpa/') for m in members):
+            raise RuntimeError('Unexpected Linux archive root, link or duplicate entry')
+        manifest = json.load(archive.extractfile('Tulpa/build-manifest.json'))
+        head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=ROOT, text=True).strip()
+        expected = {'Tulpa/'+name for name in manifest['files']} | {'Tulpa/build-manifest.json'}
+        if set(names) != expected or set(manifest['file_sha256']) != set(manifest['files']):
+            errors.append('Linux archive does not match integrity manifest')
+        if (manifest.get('product'), manifest.get('platform'), manifest.get('edition'), manifest.get('checkpoint')) != ('Tulpa', 'linux', 'source', head):
+            errors.append('Unexpected Linux product, platform or source commit')
+        for name in ('tulpa', 'setup-linux.sh', 'LICENSE', 'README.md', 'requirements/linux.txt',
+                     'requirements/tui.txt', 'chatlocal/terminal_cli.py', 'chatlocal/tui/app.py'):
+            if 'Tulpa/'+name not in expected: errors.append('Missing Linux entry: '+name)
+        for member in members:
+            rel = member.name.removeprefix('Tulpa/')
+            raw = archive.extractfile(member).read()
+            if not allowed_path(rel, archive=True): errors.append('Private Linux path: '+rel)
+            errors.extend(check_text(rel, raw))
+            if rel != 'build-manifest.json' and hashlib.sha256(raw).hexdigest() != manifest['file_sha256'].get(rel):
+                errors.append('Linux hash mismatch: '+rel)
+            if rel in ('tulpa', 'setup-linux.sh') and (not member.mode & 0o111 or b'\r\n' in raw):
+                errors.append('Linux launcher must be executable with LF line endings: '+rel)
+    if errors: raise RuntimeError('\n'.join(errors))
+    with path.open('rb') as stream: sha = hashlib.file_digest(stream, 'sha256').hexdigest()
+    return dict(archive=path.name, version=manifest['version'], commit=head, files=len(names),
+                bytes=path.stat().st_size, sha256=sha, archive_scan='passed')
 
 
 if __name__ == '__main__':

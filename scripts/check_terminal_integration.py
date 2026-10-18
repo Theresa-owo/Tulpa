@@ -4,7 +4,7 @@ Only SnowLuma is replaced by isolated HTTP/WS fixtures. No QQ messages or model
 calls are made. This catches API-shape mismatches that a fake UI client cannot.
 """
 import asyncio
-from contextlib import contextmanager
+from check_fixture_support import management_http
 import json
 from pathlib import Path
 import socket
@@ -24,26 +24,6 @@ from chatlocal.tui.grants import GrantForm, GrantEditForm
 from chatlocal.tui.modals import ConfirmModal, CredentialModal, TextModal
 from chatlocal.tui.sessions import StartForm
 from textual.widgets import Checkbox, DataTable, Input, Select, SelectionList
-
-
-@contextmanager
-def management_http(app):
-    import uvicorn
-    sock = socket.socket(); sock.bind(('127.0.0.1', 0))
-    port = sock.getsockname()[1]
-    # The fixture's TestClient owns startup/shutdown of the original MCP core.
-    server = uvicorn.Server(uvicorn.Config(app, log_level='error', lifespan='off'))
-    thread = threading.Thread(target=lambda: server.run(sockets=[sock]), daemon=True)
-    thread.start()
-    try:
-        deadline = time.monotonic()+5
-        while not server.started and time.monotonic() < deadline: time.sleep(.02)
-        if not server.started: raise AssertionError('Management HTTP did not start')
-        yield f'http://127.0.0.1:{port}'
-    finally:
-        server.should_exit = True
-        thread.join(5); sock.close()
-        if thread.is_alive(): raise AssertionError('Management HTTP did not stop')
 
 
 async def until(pilot, predicate, label, seconds=8):

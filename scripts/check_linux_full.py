@@ -1,4 +1,5 @@
 """Full-port acceptance with isolated stores, encrypted native pages and local children."""
+from check_fixture_support import isolated_env
 import hashlib
 import json
 import os
@@ -35,7 +36,7 @@ class LinuxTests(unittest.TestCase):
         def agent(*args,**kwargs):
             yield dict(type='started',text='fixture')
             yield dict(type='done',status='completed',record=dict(result={'claims':[]},events=[],bundle={}))
-        with patch.dict(os.environ,{},clear=True),TestClient(app) as client:
+        with patch.dict(os.environ,isolated_env(),clear=True),TestClient(app) as client:
             for path in ('/api/tulpa','/api/workspaces','/api/terminal/model','/api/desktop/snowluma/managed'):
                 self.assertEqual(client.get(path).status_code,401,path)
             client.headers.update(TerminalClient.headers(token))

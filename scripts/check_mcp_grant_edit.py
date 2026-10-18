@@ -23,7 +23,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT/'scripts'))
 import check_terminal_backend as backend
 from check_mcp import client as mcp_client
-from check_terminal_integration import management_http
+from check_fixture_support import management_http
 from chatlocal.mcp_access import MCPAccess, AccessDenied
 from chatlocal.mcp_qq import QQExtensions
 from chatlocal.onebot import Client, OneBotError

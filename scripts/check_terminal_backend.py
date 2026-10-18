@@ -1,4 +1,5 @@
 """Linux terminal acceptance: real local HTTP/WS fixtures, no QQ or paid models."""
+from check_fixture_support import isolated_env
 import json
 import os
 from pathlib import Path
@@ -52,7 +53,7 @@ class TerminalTests(unittest.TestCase):
         self.events = Events()
         self.sl = ThreadingHTTPServer(('127.0.0.1', 0), SL)
         self.thread = threading.Thread(target=self.sl.serve_forever, daemon=True); self.thread.start()
-        self.env = patch.dict(os.environ, {}, clear=True); self.env.start()
+        self.env = patch.dict(os.environ,isolated_env(),clear=True); self.env.start()
         self.roots = [patch('chatlocal.onebot.ROOT', self.root), patch('chatlocal.message_sender.ROOT', self.root)]
         for value in self.roots: value.start()
         self.store = Store(self.root/'data/chats.sqlite3')
@@ -226,8 +227,9 @@ class TerminalTests(unittest.TestCase):
             with patch.dict(os.environ, {'HTTP_PROXY':'http://127.0.0.1:9','ALL_PROXY':'http://127.0.0.1:9'}):
                 client = TerminalClient(url, token_file)
                 self.assertEqual(client.get('/overview')['counts']['messages'], 0)
-            result = subprocess.run([str(ROOT/'tulpa'),'--json','--url',url,
-                '--token-file',str(token_file),'personas'],cwd=ROOT,capture_output=True,text=True,timeout=15)
+            prefix = [sys.executable,'-X','utf8','-m','chatlocal.terminal_cli'] if os.name=='nt' else [str(ROOT/'tulpa')]
+            result = subprocess.run(prefix+['--json','--url',url,
+                '--token-file',str(token_file),'personas'],cwd=ROOT,capture_output=True,text=True,encoding='utf-8',timeout=15)
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertGreaterEqual(len(json.loads(result.stdout)['items']), 3)
             self.assertNotIn(self.token, result.stdout+result.stderr)

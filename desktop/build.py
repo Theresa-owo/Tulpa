@@ -92,10 +92,10 @@ def build(no_zip=False,qa=False,output=None,lite=False):
     for name in (('chatlocal','web') if lite else ('chatlocal','web','harness')):tree(ROOT/name,name)
     # Only tracked scripts: omit private probes and user chats in ignored paths.
     scripts=subprocess.check_output(['git','ls-files','scripts'],cwd=ROOT,text=True).splitlines()
-    source_only={'chat_adapter_fixture.py','prepare_reader_runtime.py','package_qq_source_fix.py','fix_qq_source.py',
+    source_only={'build_linux_release.py','chat_adapter_fixture.py','prepare_reader_runtime.py','package_qq_source_fix.py','fix_qq_source.py',
                  'napcat_qq_probe.py','napcat_qq_fixture.py','bench_napcat_qq_fixture.py'}
     for name in scripts:
-        if Path(name).suffix=='.py' and not Path(name).name.startswith(('check_','probe_')) and Path(name).name not in source_only:copy(ROOT/name,name)
+        if Path(name).suffix in ('.py','.html') and not Path(name).name.startswith(('check_','probe_')) and Path(name).name not in source_only:copy(ROOT/name,name)
     copy(ROOT/'scripts/reader_patches.py','scripts/reader_patches.py')
     copy(ROOT/'scripts/live_wechat.py','scripts/live_wechat.py')
     copy(ROOT/'scripts/qq_labels.py','scripts/qq_labels.py')
@@ -137,6 +137,8 @@ def build(no_zip=False,qa=False,output=None,lite=False):
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_snowluma_managed.py'),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_snowluma_managed_transport.py'),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_downloads.py'),'--package',str(out)],check=True)
+    for check in ('check_mcp_chat_enrichment.py','check_mcp_image_reuse.py'):
+        subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts'/check),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_upgrade.py')],check=True)
     tree(ROOT/'tools/whispercpp/Release','tools/whispercpp/Release')
     model=ROOT/'.cache/voice-models/ggml-small-q5_1.bin'

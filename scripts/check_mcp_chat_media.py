@@ -1,4 +1,5 @@
 """Live stickers: isolated real HTTP/WS MCP, no real QQ or internal model."""
+from check_fixture_support import isolated_env
 import asyncio
 import base64
 from concurrent.futures import ThreadPoolExecutor
@@ -100,7 +101,7 @@ def main():
     events=Events();upstream=ThreadingHTTPServer(('127.0.0.1',0),StickerBot)
     threading.Thread(target=upstream.serve_forever,daemon=True).start()
     try:
-        with tempfile.TemporaryDirectory(dir=ROOT/'.tmp',prefix='chat-media-') as tmp,patch.dict('os.environ',{},clear=True):
+        with tempfile.TemporaryDirectory(dir=ROOT/'.tmp',prefix='chat-media-') as tmp,patch.dict('os.environ',isolated_env(),clear=True):
             folder=Path(tmp);store=Store(folder/'chats.sqlite3')
             (folder/'.env').write_text(f'REPLY_ONEBOT_URL=http://127.0.0.1:{upstream.server_port}\nREPLY_ONEBOT_WS_URL=ws://127.0.0.1:{events.port}\nREPLY_ONEBOT_WS_TOKEN=event-fixture\n','utf-8')
             app=FastAPI();svc=install_mcp_routes(app,store);access=svc.access;tools=svc.tools

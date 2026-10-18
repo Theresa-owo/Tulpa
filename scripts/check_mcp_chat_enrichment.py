@@ -1,4 +1,5 @@
 """Functional acceptance: isolated OneBot, MCP tools, local images. No LLM/QQ writes."""
+from check_fixture_support import isolated_env
 import asyncio
 import base64
 from copy import deepcopy
@@ -546,7 +547,7 @@ def main():
     threading.Thread(target=upstream.serve_forever,daemon=True).start()
     out=io.BytesIO();Image.new('RGB',(64,48),'blue').save(out,'PNG');raw=out.getvalue()
     try:
-        with tempfile.TemporaryDirectory(prefix='tulpa-enrichment-') as tmp,patch.dict('os.environ',{},clear=True):
+        with tempfile.TemporaryDirectory(prefix='tulpa-enrichment-') as tmp,patch.dict('os.environ',isolated_env(),clear=True):
             folder=Path(tmp);store=Store(folder/'chats.sqlite3')
             (folder/'.env').write_text(f'REPLY_ONEBOT_URL=http://127.0.0.1:{upstream.server_port}\nREPLY_ONEBOT_WS_URL=ws://127.0.0.1:{events.port}\nREPLY_ONEBOT_WS_TOKEN=event-fixture\n','utf-8')
             cache=folder/'trusted';cache.mkdir()

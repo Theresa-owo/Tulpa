@@ -1,4 +1,5 @@
 """Direct MCP write grants: isolated HTTP OneBot; never touches a real QQ account."""
+from check_fixture_support import isolated_env
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -61,7 +62,7 @@ async def protocol(url,token):
 def main():
     server=ThreadingHTTPServer(('127.0.0.1',0),Fixture);threading.Thread(target=server.serve_forever,daemon=True).start()
     try:
-        with tempfile.TemporaryDirectory(dir=ROOT/'.tmp',prefix='mcp-actions-') as tmp,patch.dict('os.environ',{},clear=True):
+        with tempfile.TemporaryDirectory(dir=ROOT/'.tmp',prefix='mcp-actions-') as tmp,patch.dict('os.environ',isolated_env(),clear=True):
             folder=Path(tmp);store=Store(folder/'chats.sqlite3')
             file=folder/'fixture.json';file.write_text(json.dumps([dict(platform='qq',conversation_id=cid,conversation='Isolated test',conversation_type='group',sender_id='333',sender='Fixture',source_id=cid,content='Fixture data',timestamp='2026-10-01') for cid in ['111:group:222','111:group:444']]),'utf-8');store.import_file(file)
             # Token is optional on the server; no illegal empty Bearer header.
