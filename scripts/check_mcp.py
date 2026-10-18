@@ -2,6 +2,7 @@
 import asyncio
 import io
 import json
+import logging
 import socket
 import sys
 import tempfile
@@ -15,6 +16,7 @@ ROOT = Path(sys.argv[sys.argv.index('--package')+1]).resolve() if '--package' in
 (ROOT/'.tmp').mkdir(exist_ok=True)
 sys.path.insert(0, str(ROOT))
 import httpx
+import uvicorn
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from mcp import ClientSession
@@ -215,10 +217,30 @@ def main():
         path=folder/'messages.json';path.write_text(json.dumps(rows,ensure_ascii=False),'utf-8');store.import_file(path)
         layer=Artifacts(store);layer._roots=lambda p:[folder];layer.prepare(1);layer.prepare(2)
         app=FastAPI();service=install_mcp_routes(app,store)
+        uvicorn.Config(app,log_level='info',access_log=False)
+        loggers=[logging.getLogger(name) for name in ('uvicorn','uvicorn.error','uvicorn.access','uvicorn.asgi')]
+        def logging_state():return [(l.level,l.getEffectiveLevel(),tuple(l.handlers),l.propagate,l.disabled) for l in loggers]
+        web_logging=logging_state()
+        assert logging.getLogger('uvicorn.error').isEnabledFor(logging.INFO)
         with socket.socket() as sock:sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
         ui_headers={'X-ChatWeave-UI':'1','Origin':'http://testserver'}
         with TestClient(app) as ui:
             assert not ui.get('/api/mcp').json()['enabled']
+            from chatlocal.onebot import Client
+            with patch.object(Client,'login',return_value='111'), patch.object(Client,'call') as catalog:
+                catalog.return_value=[dict(group_id=222,group_name='Current group'),dict(group_id='invalid')]
+                groups=ui.get('/api/mcp/live-groups').json()['items']
+                catalog.assert_called_once_with('get_group_list',{'no_cache':True})
+                assert [r['conversation_id'] for r in groups]==['111:group:222']
+                catalog.reset_mock()
+                catalog.return_value=[dict(user_id=333,remark='Friend remark',nickname='Nickname'),dict(user_id=444,nickname='Other friend'),dict(user_id='invalid')]
+                friends=ui.get('/api/mcp/live-friends').json()['items']
+                catalog.assert_called_once_with('get_friend_list',{})
+                assert [(r['conversation_id'],r['name']) for r in friends]==[('111:direct:333','Friend remark'),('111:direct:444','Other friend')]
+                assert ui.get('/api/mcp/live-friends',headers={'Origin':'https://evil.invalid'}).status_code==403
+                catalog.side_effect=ValueError('OneBot unavailable')
+                assert ui.get('/api/mcp/live-friends').status_code==400
+            assert ui.get('/api/mcp/conversations?query=course').json()['items'][0]['conversation_id']=='course'
             assert ui.put('/api/mcp',json=dict(enabled=True,port=port)).status_code==403
             assert ui.get('/api/mcp',headers={'Host':'evil.invalid'}).status_code==403
             base=dict(name='Fixture A',platforms=['qq'],conversations=[['qq','course']],start='2026-10-01',end='',media=False,prepare=False,voice=False,onebot=False)
@@ -227,6 +249,7 @@ def main():
             second=ui.post('/api/mcp/connections',json=dict(base,name='Fixture B',platforms=['wechat'],conversations=[['wechat','private']]),headers=ui_headers).json()['token']
             settings=ui.put('/api/mcp',json=dict(enabled=True,port=port),headers=ui_headers).json()
             assert settings['running'], settings
+            assert logging_state()==web_logging, 'MCP startup overwrote WebUI logging'
             # A second process cannot silently take over this server's port.
             from chatlocal.mcp_server import MCPService
             rival=MCPService(service.access);rival.start()
@@ -291,6 +314,7 @@ def main():
             # Restart reuses durable settings and grants without widening scope.
             service.stop();service.start()
             assert service.status()['running'] and service.access.authorize(second)['id']==gid
+            assert logging_state()==web_logging, 'MCP restart overwrote WebUI logging'
             assert ui.put('/api/mcp',json=dict(enabled=False,port=port),headers=ui_headers).json()['running'] is False
         assert not service.thread
     print('PASS: MCP HTTP lifecycle, scopes/SQL/files, 520-message and dense pagination, images, OneBot fixtures, cancel/revoke, accounts, quotas and settings')
