@@ -84,14 +84,13 @@ Tulpa 在本机整理聊天、图片和文件，让 Agent 按你授权的范围�
 
 ## 下载
 
-| 版本 | 适合你，如果你想… | v0.5.6 下载 |
+| 版本 | 适合你，如果你想… | 下载 |
 | --- | --- | --- |
-| **MCP 轻量版** | 使用已有 Agent 查资料或参与 QQ 群聊 | [下载 ZIP](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.6/Tulpa-MCP-0.5.6-win-x64.zip) |
-| **完整版** | 在 Tulpa 内提问，使用回复、记忆和工作区；也能接外部 Agent | [下载 ZIP](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.6/Tulpa-0.5.6-win-x64.zip) |
+| **MCP 轻量版** | 使用已有 Agent 查资料或参与 QQ 群聊 | [0.5.6 ZIP](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.6/Tulpa-MCP-0.5.6-win-x64.zip) |
+| **Linux 终端版** | Linux x86_64 / ARM64，CLI/TUI、MCP 及可选内置模型 | [0.5.6 tar.gz](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.6/Tulpa-0.5.6-linux.tar.gz) |
+| **完整版（上一版）** | 在 Tulpa 内提问，使用回复、记忆和工作区；也能接外部 Agent | [0.5.5 ZIP](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.5/Tulpa-0.5.5-win-x64.zip) |
 
-| **Linux 终端版** | Linux x86_64 / ARM64，CLI/TUI、MCP 及可选内置模型 | [下载 tar.gz](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.6/Tulpa-0.5.6-linux.tar.gz) |
-
-Windows 两版都有 Python 和相同的 MCP 能力。完整版内置 Harness、本地 OCR / 语音 / Office 解析与固定 WebView2；轻量版使用系统 WebView2 Evergreen Runtime，语音模型按需安装。[版本区别](doc/MCP_LITE.md) · [最新发布](https://github.com/fumingyang2004/Tulpa/releases/latest) · [0.5.6 更新说明](doc/releases/0.5.6.md)
+**0.5.6 本次发布 MCP 轻量版与 Linux 终端版，Windows 完整版维持 0.5.5。** Windows 发行包自带 Python；完整版内置 Harness、本地 OCR / 语音 / Office 解析与固定 WebView2，轻量版使用系统 WebView2 Evergreen Runtime，语音模型按需安装。[版本区别](doc/MCP_LITE.md) · [最新发布](https://github.com/fumingyang2004/Tulpa/releases/latest) · [0.5.6 更新说明](doc/releases/0.5.6.md)
 
 需要 **.NET Framework 4.8**。下载 ZIP 后完整解压到可写目录，打开 `Tulpa/Tulpa.exe`；不要从压缩包直接运行。**`Source code` 不是安装包，两版不要混装。** QQ / 微信客户端、模型服务及可选 OneBot 服务需自行准备。
 
