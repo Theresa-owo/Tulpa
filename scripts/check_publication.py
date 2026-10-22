@@ -4,6 +4,7 @@ This is a publication gate, not a claim that automated scanning finds all PII.
 Review documentation and publish only the intended branch and release tag.
 """
 import argparse
+from functools import lru_cache
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
@@ -19,6 +20,12 @@ PERSONAL_PATH = re.compile(r'[A-Za-z]:[\\/]Users[\\/](?!Public(?:[\\/]|\b)|Defau
 TEXT_EXT = {'.py', '.js', '.cjs', '.css', '.html', '.md', '.txt', '.json', '.toml', '.yml', '.yaml', '.cs', '.ps1', '.example', '.config'}
 
 
+@lru_cache(maxsize=1)
+def official_snowluma_archives():
+    manifest=json.loads((ROOT/'chatlocal/snowluma_manifest.json').read_text('utf-8'))
+    return {'resources/snowluma/'+s['name']:s['sha256'] for s in manifest.get('archives',{}).values()}
+
+
 def allowed_path(name, *, archive=False):
     p = PurePosixPath(name)
     if not name or '\\' in name or ':' in name or p.is_absolute() or '..' in p.parts:
@@ -32,7 +39,7 @@ def allowed_path(name, *, archive=False):
         return False
     if archive:
         if 'snowluma' in p.parts or any(part.lower().startswith('snowluma-') for part in p.parts):
-            return False
+            if name not in official_snowluma_archives():return False
         if p.name.endswith('.QA.exe') or p.name == 'direct_url.json':
             return False
         if p.parts[0] == '.cache' and (len(p.parts) < 3 or p.parts[1] not in {'rapidocr', 'voice-models'}):
@@ -117,6 +124,11 @@ def archive_check(path):
             rel = name.removeprefix('Tulpa/')
             if not allowed_path(rel, archive=True):
                 errors.append('private archive path: ' + rel)
+            if rel in official_snowluma_archives():
+                if hashlib.sha256(z.read(name)).hexdigest()!=official_snowluma_archives()[rel]:
+                    errors.append('unverified SnowLuma archive: '+rel)
+                if 'Tulpa/doc/licenses/SL_LICENSE.txt' not in expected:
+                    errors.append('missing SnowLuma license')
             if rel == 'runtime/Lib/site-packages/certifi/cacert.pem':
                 ca = z.read(name).decode('ascii')
                 if '-----BEGIN CERTIFICATE-----' not in ca or 'PRIVATE KEY' in ca:
@@ -159,6 +171,11 @@ def linux_archive_check(path):
             rel = member.name.removeprefix('Tulpa/')
             raw = archive.extractfile(member).read()
             if not allowed_path(rel, archive=True): errors.append('Private Linux path: '+rel)
+            if rel in official_snowluma_archives():
+                if hashlib.sha256(raw).hexdigest()!=official_snowluma_archives()[rel]:
+                    errors.append('Unverified SnowLuma archive: '+rel)
+                if 'Tulpa/doc/licenses/SL_LICENSE.txt' not in expected:
+                    errors.append('Missing SnowLuma license')
             errors.extend(check_text(rel, raw))
             if rel != 'build-manifest.json' and hashlib.sha256(raw).hexdigest() != manifest['file_sha256'].get(rel):
                 errors.append('Linux hash mismatch: '+rel)

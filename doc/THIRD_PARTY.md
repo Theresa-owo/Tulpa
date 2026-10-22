@@ -58,9 +58,18 @@ acceptance (`scripts/qq_passive_keys.py`). The WeChat adaptation adds bounded le
 key recovery. The modified WeChat file carries a modification notice. Reader
 licenses remain in `tools/qq-reader/LICENSE` and `tools/wechat-reader/LICENSE`.
 
+## SnowLuma
+
+SnowLuma 2.1.1 may be downloaded from its official release or included as the
+unchanged, SHA256-pinned complete runtime archive in an authorized Tulpa build.
+The project owner reports written permission for this integration and bundling.
+It is a separately licensed dependency, not covered by Tulpa's MIT license.
+The [upstream license](licenses/SL_LICENSE.txt), copyright and original EULA /
+privacy documents are retained. End users explicitly consent before deployment.
+The official binary archive contains no Tulpa credentials or user configuration.
+
 ## Not bundled
 
-SnowLuma / NapCat, QQ and WeChat clients are not redistributed. SnowLuma's separate
-EULA does not grant general redistribution permission; users install their own
-service. No Microsoft / Office fonts are redistributed. User-provided credentials,
+NapCat, QQ and WeChat clients are not redistributed. No Microsoft / Office fonts
+are redistributed. User-provided credentials,
 chat exports, model answers and local account state are not part of a release.

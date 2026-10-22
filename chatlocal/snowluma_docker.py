@@ -29,7 +29,13 @@ LABEL = 'io.tulpa.snowluma'
 
 
 def docker_manifest(manifest):
-    return dict(manifest, mode='managed_docker', adapter='snowluma-docker-1.14.22', scope=list(SCOPE))
+    # Docker retains its independently verified image; a Windows archive
+    # upgrade must not silently relabel or upgrade the container backend.
+    version = manifest.get('docker', {}).get('version', '1.14.22')
+    agreements = [dict(doc, url=doc['url'].replace('/v'+manifest['version']+'/', '/v'+version+'/'))
+                  for doc in manifest['agreements']]
+    return dict(manifest, version=version, agreements=agreements, mode='managed_docker',
+                adapter='snowluma-docker-'+version, scope=list(SCOPE))
 
 
 def release(manifest):

@@ -1,6 +1,6 @@
 """Version-specific official admin API and owned Windows process operations.
 
-Written against v1.14.22 public schemas; no SnowLuma source is copied or patched.
+Adapters for v1.14.22 and audited v2 releases; no upstream source is patched.
 No discovery of passwords or attempt to control externally launched services.
 """
 import ctypes
@@ -317,6 +317,7 @@ class SnowLumaAPI:
     def __init__(self, port, *, client_factory=httpx.Client):
         self.base = f'http://127.0.0.1:{port}'
         self.token = ''
+        self.version = '1.14.22'
         self.client_factory = client_factory
 
     def request(self, method, path, body=None):
@@ -359,6 +360,7 @@ class SnowLumaAPI:
             raise ManagedError('admin_protocol', '管理响应与已审核版本不符，已停止。') from None
 
     def initialize(self, password, manifest, check):
+        self.version = manifest['version']
         check()
         result = self.request('POST', '/api/login', dict(password=password))
         if not result.get('success') or not isinstance(result.get('token'), str) or not result['token']:
@@ -390,7 +392,15 @@ class SnowLumaAPI:
         return value
 
     def probe(self, pid):
-        value = self.request('GET', f'/api/processes/{pid}/probe-login').get('info')
+        if self.version in ('2.0.3', '2.1.0', '2.1.1'):
+            # v2 removed probe-login. The process snapshot provides detected
+            # account identity before attachment and native UIN after login.
+            rows = [row for row in self.processes() if row.get('pid') == pid]
+            if len(rows) != 1:return ''
+            row = rows[0]
+            value = row if row.get('loggedIn') is True else row.get('account')
+        else:
+            value = self.request('GET', f'/api/processes/{pid}/probe-login').get('info')
         uin = str(value.get('uin', '')) if isinstance(value, dict) else ''
         return uin if re.fullmatch(r'[1-9]\d{4,9}', uin) else ''
 

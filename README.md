@@ -100,15 +100,15 @@ Tulpa 在本机整理聊天、图片和文件，让 Agent 按你授权的范围�
 
 ### SnowLuma 自动配置
 
-自行下载并解压 [SnowLuma v1.14.22 Windows x64 完整版](https://github.com/SnowLuma/SnowLuma/releases/tag/v1.14.22)，在 Tulpa 输入文件夹路径，勾选授权，点击 **载入并配置**。文件检查和配置一次完成，已有连接自动检测并导入；新目录自动初始化、选择空闲端口、配置 HTTP/WS 并核对 QQ。多 QQ 时选择目标即可，无需终端、手填 Token 或设置管理密码。
+打开并登录 QQ，在 Tulpa 的 **OneBot 设置 → 连接 QQ** 中勾选协议和自动配置授权，点击 **一键配置**。Tulpa 自动准备固定版本 [SnowLuma 2.1.1](https://github.com/SnowLuma/SnowLuma/releases/tag/v2.1.1)，校验运行包、初始化随机凭据、选择空闲端口、配置 HTTP/WS 并核对 QQ 与实时事件。多个 QQ 进程时选择目标，未登录时在 QQ 扫码即可，无需终端、下载路径、手填 Token 或管理密码。
 
-已有可用节点会自动检测并导入，保留原配置。Tulpa 不下载、复制或附带 SnowLuma，不扩大 MCP 授权。[操作与恢复](doc/SNOWLUMA_MANAGED.md) · [验证范围](doc/SNOWLUMA_MANAGED_VALIDATION.md)
+优先使用校验通过的随包运行文件；未随包提供时从官方渠道下载。原有独立 SnowLuma 可在高级选项导入，保留原配置；不会扩大 MCP 授权。第三方许可仍独立适用。[操作与恢复](doc/SNOWLUMA_MANAGED.md) · [本次开发验证](doc/SNOWLUMA_AUTOMATIC_VALIDATION.md)
 
 ### 我要 QQ 水群
 
 **无需先导入整库历史。** 这条路径直接接收 OneBot 实时事件。
 
-1. 启动 QQ 和 Tulpa；载入自行下载的 SnowLuma 文件夹并同意自动配置，或导入已有 OneBot 连接。持续群聊需要 **HTTP + 正向 WebSocket**。[连接教程](doc/SNOWLUMA_SETUP.md)
+1. 启动 QQ 和 Tulpa；在连接 QQ 中勾选协议并点击“一键配置”，或从高级选项导入已有 OneBot 连接。持续群聊需要 **HTTP + 正向 WebSocket**。[连接教程](doc/SNOWLUMA_MANAGED.md)
 2. 在 **连接外部 Agent**（或 **外部 Agent / MCP**）选择 QQ，在会话来源选择 **QQ 当前群聊 · 无需导入**，只选测试群；截止日期留空以接收未来消息。
 3. 开放持续群聊和发送权限，按需加看图、表情发送或收藏。创建连接、检测工具，再按 [Agent 教程](doc/AGENT_SETUP.md)配置并重连客户端。
 4. 在外部 Agent 的**专用对话**中使用上面的水群示例。想换龙娘，选择 `dragon_girl`。新人格放进当前安装目录的 `chatlocal/prompts/mcp_chat/`，重新列出即可发现。
@@ -169,4 +169,4 @@ Tulpa 自有代码采用 [MIT License](LICENSE)，第三方组件、模型与客
 
 - [qq-bridge](https://github.com/Derpyu520/qq-bridge)：群聊行为与提示词设计参考；小鲸鱼基于其角色卡，由 Tulpa 维护者改编，保留来源和 MIT 许可。
 - [QQ-agent](https://github.com/K0nd1us/QQ-agent)：表情收藏、语义笔记、候选与用量反馈的设计参考；Tulpa 按自身授权和媒体校验机制独立实现。
-- [SnowLuma](https://github.com/SnowLuma/SnowLuma)：提供 QQ / OneBot 接入能力，需独立安装并遵循其许可。
+- [SnowLuma](https://github.com/SnowLuma/SnowLuma)：提供 QQ / OneBot 接入能力，支持授权后自动部署，遵循其独立许可。

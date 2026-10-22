@@ -213,7 +213,7 @@ def adapter_checks():
     assert '/api/agreements/record-consent' not in [p for _,p,_ in calls[before:]]
     failure[0]='auth';rejected('admin_auth_failed',lambda:api.initialize('fixture',manifest,lambda:None))
     rejected('admin_action_rejected',lambda:api.request('POST','/api/debug/invoke',{}))
-    print('PASS official v1.14.22 request shapes (mock): login, exact agreements hash, official consent, separate tokens, applied!=saved, auth failure, narrow action list')
+    print('PASS official '+manifest['version']+' request shapes (mock): login, exact agreements hash, official consent, separate tokens, applied!=saved, auth failure, narrow action list')
 
 
 def lifecycle_checks(root):

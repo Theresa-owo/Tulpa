@@ -219,7 +219,7 @@ async def wire_nested(service,token,raw):
                 before=len(DetailBot.queries);eid=add([child('nested-outer')]);out=await wait()
                 detail=out.structuredContent['messages'][-1]['referenced_messages'][0]
                 assert [len(n['segments'][0]['nodes']) for n in detail['nodes']]==[38,4,0,0,0],detail
-                assert not out.structuredContent['materials']['incomplete']
+                assert not out.structuredContent['materials']['incomplete'], out.structuredContent['materials']
                 assert 'capabilities' not in out.structuredContent['chat_guidance']
                 image=out.structuredContent['materials']['images'][0]
                 assert image['event_id']==eid and image['image_index']==0

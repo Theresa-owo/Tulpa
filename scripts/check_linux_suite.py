@@ -13,7 +13,7 @@ CHECKS=('reader_install','linux_distribution','linux_full','terminal_backend','t
         'reply_quote','investigation','agent_budget','agent_failure',
         'qq_history','qq_replies','qq_labels','qq_storage','wechat_export','wechat_media_live','qq_media_live',
         'mcp','mcp_chat','mcp_chat_turns','mcp_chat_prompts','mcp_language_learning','mcp_language_usage','mcp_reactions',
-        'snowluma_managed','snowluma_managed_transport','snowluma_setup','snowluma_docker','snowluma_docker_tui',
+        'snowluma_managed','snowluma_managed_transport','snowluma_download','snowluma_setup','snowluma_docker','snowluma_docker_tui',
         'group_admin','client_accounts','data_controls','refresh_chat','reader_cache',
         'import_batches','chat_browser','overview','qq_account_diagnostics','identity','people',
         'mcp_chat_media','mcp_image_import','mcp_qq_extensions','mcp_grant_edit','mcp_chat_targets','mcp_downloads','mcp_onebot','mcp_actions','mcp_auto_learning',
