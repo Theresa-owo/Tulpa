@@ -264,6 +264,9 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
     await waitText('mcp-error','主人 QQ 应为');
     assert.equal(await ownerForm.getByRole('button').isEnabled(),true);
     assert.ok((await ownerForm.textContent()).includes('Codex 自身工具不受此设置影响'));
+    assert.ok((await ownerForm.textContent()).includes('/tulpa 把 outgoing-files 里的 report.pdf 发到这个群'));
+    assert.ok((await ownerForm.textContent()).includes('不需要 JSON'));
+    assert.ok(!(await ownerForm.textContent()).includes('"arguments"'));
     await ownerForm.getByLabel('主人 QQ',{exact:true}).fill('22222');requests=[];
     await ownerForm.getByRole('button',{name:'保存主人设置'}).click();
     await waitText('mcp-error','主人设置已保存');

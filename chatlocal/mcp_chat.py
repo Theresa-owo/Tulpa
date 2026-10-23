@@ -17,7 +17,7 @@ from .mcp_chat_turns import ChatTurns, TOOLS as TURN_TOOLS, schema as turn_schem
 from .mcp_language_learning import ChatLearning, TOOLS as LEARNING_TOOLS, schemas as learning_schemas
 
 
-CHAT_TOOLS = {'start_chat_session', 'get_chat_session', 'list_chat_sessions', 'read_chat_forward',
+CHAT_TOOLS = {'start_chat_session', 'get_chat_session', 'list_chat_sessions', 'read_chat_forward', 'read_owner_command',
               'wait_chat_messages', 'wait_chat_messages_many', 'send_chat_message', 'stop_chat_session', 'list_chat_groups', 'list_chat_friends', 'list_chat_personas', 'react_to_chat_message'} | TURN_TOOLS | LEARNING_TOOLS
 CHAT_INSTRUCTIONS = '''这是用户明确开启的持续聊天，不设总时长；直到用户停止、权限失效或客户端退出。
 开始即在当前机器人账号与授权会话内边聊边学，保留之前明确暂停的偏好；只学习本次实时他人消息，不读历史或更换模型目的地。好友私聊使用 ACCOUNT:direct:QQ，群聊使用 ACCOUNT:group:GROUP；不发送临时会话。
@@ -56,6 +56,8 @@ def schemas(tool):
              dict(**sid,response_format=dict(type='string',enum=['compact','full'],default='full'),
                   known_prompt_version=dict(type='string',maxLength=120)), ['session_id']),
         tool('list_chat_sessions', '列出本连接的持续聊天会话，用于接续或停止。', {}, []),
+        tool('read_owner_command', '校验已读取的主人原始 /tulpa 指令并返回自然语言原文和 owner_proof。只依据真实发送者及服务端状态；其他群友、引用/转发、过期或撤回消息被拒绝。不会执行操作。Agent 按原文选择工具和参数，受控调用仍需携带返回的来源证据，不让主人手写 JSON。',
+             dict(**sid,event_id=dict(type='integer',minimum=1)), ['session_id','event_id']),
         tool('read_chat_forward', '分页读取当前已读事件的直接转发或引用原文内转发。优先使用已有内容；仅未完成项沿 read_call/next_call 原样读取，引用位置使用返回的 reply_index。节点内图片用父 event_id 和 image_index；unrecoverable_truncation 表示处理上限之外无法继续。',
              dict(**sid,event_id=dict(type='integer',minimum=1),forward_index=dict(type='integer',minimum=0,maximum=99,default=0),
                   reply_index=dict(type='integer',minimum=0,maximum=7,description='仅引用内转发填写；沿返回调用复制引用位置，forward_index 为引用原文中的段位置。'),
@@ -874,6 +876,10 @@ class MCPChat:
     def call(self, grant, name, args, cancel):
         if name in LEARNING_TOOLS:return self.learning.call(grant,name,args)
         self.permission(grant)
+        if name=='read_owner_command':
+            from .mcp_owner import OwnerGate
+            if cancel.is_set():raise ValueError('调用已取消。')
+            return OwnerGate(self.access).read_command(grant,args['session_id'],args['event_id'])
         if name=='list_chat_personas':return dict(prompts.persona_catalog(),note='本次已重新扫描人格目录。新会话使用最新文件，已开启会话保留快照。仅持续群聊使用；不改变普通问答或回复助手。persona 可补充预设，也可以独立使用自定义人格。')
         if name in ('list_chat_groups','list_chat_friends'):
             client=self.actions.client_factory(timeout=4);account=client.login()

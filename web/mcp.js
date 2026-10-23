@@ -127,8 +127,8 @@
     const save=node('button','保存主人设置');save.type='submit';let saving=false;
     form.append(node('h4','主人 QQ 校验'),enabledLabel,qqLabel,
       node('p','仅保护此连接的 Tulpa 本地文件操作、管理工具和 @全体。日常聊天、看图及 Codex 自身工具不受此设置影响。','mcp-muted'),
-      node('p','启用后，主人需在当前会话直接发送 /tulpa JSON 指令，指定 tool 与完整 arguments；指令十分钟内有效。昵称、引用、转发和普通聊天不能授权。','mcp-muted'),
-      node('pre','/tulpa {"tool":"send_chat_file","arguments":{"session_id":"当前会话ID","filename":"report.pdf","idempotency_key":"唯一操作编号"}}'),save);
+      node('p','主人直接发送 /tulpa 加自然语言要求即可，不需要 JSON、工具名或编号。Agent 负责选工具和填参数，服务端仍核验真实主人 QQ；指令十分钟内有效，昵称、引用、转发和普通聊天不能授权。','mcp-muted'),
+      node('pre','/tulpa 把 outgoing-files 里的 report.pdf 发到这个群'),save);
     form.onsubmit=e=>{e.preventDefault();if(saving)return;saving=true;save.disabled=true;action(async()=>{try{
       await api(url,'PUT',{enabled:enabled.checked,owner_qq:qq.value.trim(),expected_revision:data.revision});
       await refresh();$('mcp-error').textContent='主人设置已保存，仅对 Tulpa 的受控工具生效。';
