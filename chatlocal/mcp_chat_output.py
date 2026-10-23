@@ -20,6 +20,8 @@ def compact_wait(data,known_prompt_version=None):
     if active and state.get('consecutive_own_messages',0)>=2:hints.append('自己的话较密，先让别人接；被追问时仍可回应。')
     if state.get('image_events'):hints.append('先看图片与 materials 映射，按 materials.note 区分失败补读与客户端图片接入限制。')
     guidance={k:full[k] for k in ('prompt_version','persona_name','capabilities') if k in full}
+    # Owner identity can change without changing the static persona version.
+    if 'request_policy' in full:guidance['request_policy']=full['request_policy']
     if known_prompt_version and known_prompt_version==full.get('prompt_version'):
         guidance.pop('persona_name',None);guidance.pop('capabilities',None)
     guidance['reminders']=hints
