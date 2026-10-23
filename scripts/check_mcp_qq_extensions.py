@@ -295,7 +295,7 @@ def main():
                         scope=json.loads(db.execute('SELECT scope FROM grants WHERE id=?',(g['id'],)).fetchone()[0])
                         db.execute('UPDATE grants SET scope=?,revision=revision+1 WHERE id=?',
                             (json.dumps(dict(scope,qq_interactions=False,chat_poke=True)),g['id']))
-                    assert call('qq_interact',action='send_like',conversation_id='111:group:223',params={'user_id':'333'},idempotency_key='poke-only-denied-like').isError
+                    assert call('qq_interact',action='send_like',conversation_id='111:group:223',params={'user_id':'333','times':1},idempotency_key='poke-only-denied-like').isError
                     tools.chat.receive(tap)
                     context=data('get_chat_session',session_id=sid)
                     tapped=next(m for m in context['context']['messages'] if m.get('notice',{}).get('type')=='poke')
