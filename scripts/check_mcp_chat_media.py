@@ -67,7 +67,9 @@ async def protocol(svc, token, sid, eid):
             async with ClientSession(r,w) as c:
                 await c.initialize()
                 tools={x.name:x for x in (await c.list_tools()).tools}
-                assert MEDIA_TOOLS.keys()<=tools.keys()
+                image_tools = {name for name,flag in MEDIA_TOOLS.items() if flag in ('chat_images','chat_sticker_send','chat_sticker_collect')}
+                assert image_tools<=tools.keys()
+                assert not {'list_chat_files','download_chat_file','send_chat_file','moderate_chat_member'} & tools.keys()
                 assert tools['send_chat_sticker'].annotations.openWorldHint
                 result=await c.call_tool('read_chat_image',dict(session_id=sid,event_id=eid))
                 assert not result.isError,result
@@ -220,7 +222,7 @@ def main():
                 import tomllib
                 from chatlocal.mcp_connect import codex_config
                 entries=tomllib.loads(codex_config('http://127.0.0.1:18777/mcp','fixture',access.authorize(g['token'])['scope']))['mcp_servers']['tulpa']['tools']
-                assert MEDIA_TOOLS.keys()<=entries.keys()
+                assert {name for name,flag in MEDIA_TOOLS.items() if access.authorize(g['token'])['scope'].get(flag)}<=entries.keys()
                 fresh=access.create(config|dict(chat_images=True))
                 sid=data('start_chat_session',conn=fresh,conversation_id='111:group:222',persona='撤销验收',idempotency_key='revoke-media-session')['session']['id']
                 eid=add(899);entered=threading.Event();release=threading.Event()

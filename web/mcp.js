@@ -27,6 +27,9 @@
             <label><input id="mcp-onebot" type="checkbox">读取 OneBot 群公告、精华、当前成员和文件目录</label>
             <label><input id="mcp-send" type="checkbox">允许直接发送 QQ 消息（无需逐次审批）</label>
             <label><input id="mcp-chat" type="checkbox">允许外部 Agent 持续聊天（群聊 / 好友私聊，需发送权限，可随时停止）</label>
+            <label><input id="mcp-chat_files" type="checkbox" disabled>实时文件读取、发送及授权群的文件管理</label>
+            <label><input id="mcp-chat_file_send" type="checkbox" disabled>允许发送已配置工作区内的附件文件</label>
+            <label><input id="mcp-chat_moderate" type="checkbox" disabled>允许禁言 / 解禁（须具备群管理员权限）</label>
             <label><input id="mcp-chat_reactions" type="checkbox" disabled>允许对已读群消息添加 / 撤销小表情回应（无需逐次审批）</label>
             <small class="mcp-muted">与发送表情包独立，默认每会话冷却 10 秒。旧连接不会自动获得此权限。</small>
             <fieldset class="mcp-chat-media"><legend>持续群聊 · 表情包（可选）</legend>
@@ -36,7 +39,7 @@
               <small class="mcp-muted">先开启持续群聊，再选择所需权限。看图由外部模型完成，不调用 Tulpa 模型；每小时最多看图 60 次、收藏 12 次，每张 6 MiB。发送每分钟最多 12 次；停止群聊也会停止表情操作。</small>
             </fieldset>
             <label><input id="mcp-manage" type="checkbox">允许直接执行 QQ 群管理（无需逐次审批）</label>
-          </fieldset><p class="mcp-muted">普通消息查询可连续分页，没有任务消息总量上限。文件和语音处理仅生成本地缓存。OneBot 须已有有效配置；群信息和成员是查询当时的状态，不能还原历史。权限修改请撤销旧连接后新建。</p>
+          </fieldset><p class="mcp-muted">普通消息查询可连续分页，没有任务消息总量上限。文件和语音处理仅生成本地缓存。OneBot 须已有有效配置；群信息和成员是查询当时的状态，不能还原历史。已有指定范围的 QQ 连接可在下方添加授权群，保留原凭证和已运行的会话；其他权限可在终端管理界面修改。</p>
           <p id="mcp-create-status" class="mcp-muted" role="status" aria-live="polite"></p>
           <button id="mcp-create" type="submit" aria-describedby="mcp-create-status">创建连接凭据</button>
           <button id="mcp-edit-port" type="button" hidden>修改服务端口</button>
@@ -98,15 +101,47 @@
     for (const row of current.connections) {
       const card=node('div','', 'mcp-connection'); card.append(node('strong',row.name+(row.revoked?' · 已撤销':'')));
       const scope=row.scope;
+      card.append(node('p','文件与禁言权限：'+[scope.chat_files?'实时文件读写与管理':'',scope.chat_file_send?'工作区附件发送':'',scope.chat_moderate?'禁言 / 解禁':''].filter(Boolean).join('、')+(!scope.chat_files&&!scope.chat_file_send&&!scope.chat_moderate?'均未开启':''),'mcp-muted'));
       card.append(node('p',scope.platforms.join(' / ')+' · '+(scope.conversations.length?scope.conversations.length+' 个指定会话':'全部会话')+' · '+(scope.start||'不限起点')+' 至 '+(scope.end||'包括未来消息'), 'mcp-muted'));
       card.append(node('p','操作权限：'+[scope.send?'QQ 直接发送':'',scope.chat?'持续群聊':'',scope.chat_reactions?'消息表情回应':'',scope.chat_images?'群聊看图与收藏目录':'',scope.chat_sticker_send?'发送表情':'',scope.chat_sticker_collect?'收藏到 QQ':'',scope.manage?'群管理直接操作':''].filter(Boolean).join('、')+(scope.send||scope.manage?' · 持续授权，可撤销':'仅资料读取'),'mcp-muted'));
       card.append(node('p','来源账号：'+Object.entries(row.accounts).map(([p,id])=>p+' '+(id||'当前导入资料')).join(' / ')+' · '+row.calls+' 次调用', 'mcp-muted'));
       if(row.valid===false&&!row.revoked)card.append(node('p','来源账号已改变，请撤销并重新创建连接。','mcp-warning'));
+      if(!row.revoked&&row.valid!==false&&scope.chat_account&&scope.conversations.length){
+        const add=node('button','添加授权群');add.type='button';
+        add.onclick=()=>action(async()=>{add.disabled=true;try{await groupEditor(card,row);}finally{add.disabled=false;}});card.append(add);
+      }
       if(!row.revoked){const button=node('button','撤销连接');button.type='button';button.onclick=()=>action(async()=>{await api('/connections/'+encodeURIComponent(row.id)+'/revoke','POST',{});await refresh();});card.append(button);}
       $('mcp-connections').append(card);
     }
     if(!current.connections.length)$('mcp-connections').append(node('p','还没有授权连接。','mcp-muted'));
     $('mcp-audit').replaceChildren(...current.recent.map(row=>node('p',new Date(row.at*1000).toLocaleString()+' · '+row.name+' · '+row.tool+' · '+row.status+' · '+row.seconds+' 秒 · '+row.messages+' 条消息','mcp-muted')));
+  }
+  async function groupEditor(card,row){
+    card.querySelector('[data-group-editor]')?.remove();
+    const data=await api('/connections/'+encodeURIComponent(row.id)+'/groups');
+    const box=node('section',''),form=node('form',''),label=node('label','输入待添加的 QQ 群号（空格或逗号分隔）');box.dataset.groupEditor='1';
+    box.append(node('h4','为「'+row.name+'」添加授权群'));
+    box.append(node('p','新增群将继承此连接现有权限和日期范围。提交后立即生效，保留现有会话。','mcp-muted'));
+    const permissionLabels={media:'资料图片',prepare:'原文件与文字提取',voice:'语音转写',onebot:'OneBot 群资料',send:'直接发送',manage:'群管理',chat:'持续聊天',chat_files:'实时文件读写与管理',chat_file_send:'附件文件发送',chat_moderate:'禁言 / 解禁',chat_reactions:'消息表情回应',chat_images:'群聊看图',chat_sticker_send:'发送表情',chat_sticker_collect:'收藏表情',chat_voice:'实时语音',chat_video:'实时视频',qq_messages:'QQ 消息操作',qq_interactions:'QQ 互动',qq_friends:'好友管理',qq_profile:'个人资料',qq_qzone:'QQ 空间',qq_albums:'群相册'};
+    const permissions=Object.entries(data.scope).filter(([,v])=>typeof v==='boolean').map(([k,v])=>(permissionLabels[k]||k)+'：'+(v?'已开启':'关闭')).join('；');
+    box.append(node('p','现有权限：'+permissions,'mcp-muted'),node('p','QQ 账号：'+data.scope.chat_account+' · 现有 '+data.scope.conversations.length+' 个会话 · '+(data.scope.start||'不限起点')+' 至 '+(data.scope.end||'包括未来消息'),'mcp-muted'));
+    const input=document.createElement('input');input.type='text';input.autocomplete='off';input.placeholder='输入 QQ 群号';label.append(input);form.append(label);
+    const picker=node('div','','mcp-chats'),selectedIds=new Set();let submitting=false;
+    const preview=node('p','','mcp-muted'),submit=node('button','确认添加以上群至此连接');submit.type='submit';submit.disabled=true;
+    const render=()=>{
+      const typed=input.value.trim()?input.value.trim().split(/[\s,，、;；]+/):[];
+      const ids=[...new Set([...selectedIds,...typed])],items=ids.map(id=>data.items.find(item=>item.group_id===id));
+      const invalid=items.some(item=>!item),pending=items.filter(item=>item&&!item.authorized),overLimit=data.scope.conversations.length+pending.length>500;
+      preview.textContent=invalid?'有群号不在当前账号群目录中，请核对。':overLimit?'添加后超过 500 个指定会话。':pending.length?'待添加 '+pending.length+' 个群：'+pending.map(item=>item.name+'（'+item.group_id+'）').join('、'):'请选择或输入尚未授权的群。';
+      submit.disabled=submitting||invalid||!pending.length||overLimit;
+      submit.textContent='确认添加 '+pending.length+' 个群至「'+row.name+'」';return pending.map(item=>item.group_id);
+    };
+    for(const item of data.items){const entry=node('label',''),check=document.createElement('input');check.type='checkbox';check.checked=!!item.authorized;check.disabled=!!item.authorized;
+      check.onchange=()=>{if(check.checked)selectedIds.add(item.group_id);else selectedIds.delete(item.group_id);render();};
+      entry.append(check,node('span',item.name+'（'+item.group_id+'）'+(item.authorized?' · 已授权':'')));picker.append(entry);}
+    input.oninput=render;form.append(picker,preview,submit);box.append(form);card.append(box);render();
+    form.onsubmit=e=>{e.preventDefault();action(async()=>{if(submitting)return;const ids=render();if(submit.disabled)return;submitting=true;submit.disabled=true;try{const result=await api('/connections/'+encodeURIComponent(row.id)+'/groups','POST',{group_ids:ids,revision:data.revision});const note='已添加授权群：'+result.added.map(item=>item.name+'（'+item.group_id+'）').join('、');form.replaceChildren(node('p',note));await refresh();$('mcp-error').textContent=note;}catch(error){submitting=false;if(submit.isConnected)render();throw error;}});};
+    input.focus();
   }
   function selection(){ $('mcp-selection').textContent='已选择 '+selected.size+' 个会话（搜索不会清除已选）'; }
   async function chats(reset=true) {
@@ -250,6 +285,7 @@
   $('mcp-chat-stop-all').onclick=()=>chatAction(async()=>{await api('/chats/all/stop','POST',{});await refreshChats();});
   function mediaPermissions(){
     const active=$('mcp-chat').checked&&$('mcp-send').checked;
+    for(const flag of ['chat_files','chat_file_send','chat_moderate']){const input=$('mcp-'+flag);input.disabled=!active;if(!active)input.checked=false;}
     $('mcp-chat_reactions').disabled=!active;if(!active)$('mcp-chat_reactions').checked=false;
     $('mcp-chat_images').disabled=!active;if(!active)$('mcp-chat_images').checked=false;
     for(const flag of ['chat_sticker_send','chat_sticker_collect']){const input=$('mcp-'+flag);input.disabled=!active||!$('mcp-chat_images').checked;if(input.disabled)input.checked=false;}
@@ -277,7 +313,7 @@
     const allowStart=current&&!current.running,port=Number($('mcp-port').value);
     busy=true;createError='';renderService();
     try{const body={name:$('mcp-name').value,platforms:['qq','wechat'].filter(p=>$('mcp-'+p).checked),conversations:[...selected.values()],all_conversations:$('mcp-all').checked,start:$('mcp-start').value,end:$('mcp-end').value};
-      for(const flag of ['media','prepare','voice','onebot','send','manage','chat','chat_reactions','chat_images','chat_sticker_send','chat_sticker_collect'])body[flag]=$('mcp-'+flag).checked;
+      for(const flag of ['media','prepare','voice','onebot','send','manage','chat','chat_reactions','chat_images','chat_sticker_send','chat_sticker_collect','chat_files','chat_file_send','chat_moderate'])body[flag]=$('mcp-'+flag).checked;
       if(!body.platforms.length)throw Error('请选择允许访问的平台。');
       if(!body.all_conversations&&!body.conversations.length)throw Error('请选择会话，或明确勾选允许所选平台全部会话。');
       if(body.start&&body.end&&body.start>body.end)throw Error('截止日期不能早于开始日期。');

@@ -4,6 +4,7 @@ import socket
 import threading
 import time
 from contextlib import asynccontextmanager
+from functools import partial
 
 import anyio
 from mcp import types
@@ -15,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from .mcp_access import AccessDenied
+from .mcp_access import AccessDenied, CHAT_WAIT_TOOLS
 from .mcp_tools import MCPTools, INSTRUCTIONS
 from .mcp_chat import CHAT_TOOLS
 from .mcp_chat_media import MEDIA_TOOLS, MEDIA_WRITES, MAX_BASE64_LENGTH
@@ -55,9 +56,9 @@ class MCPService:
             # Listing contains only static tool descriptions/permission flags.
             # Native source/epoch validation belongs to every historical tool
             # call, not the transport; live chat must work without that database.
-            grant = self.access.authorize(token, source=False)
+            grant = await anyio.to_thread.run_sync(partial(self.access.authorize, token, source=False))
             rows = await anyio.to_thread.run_sync(self.tools.schemas, grant)
-            self.access.ensure_revision(grant)
+            await anyio.to_thread.run_sync(self.access.ensure_revision, grant)
             return [types.Tool(name=s['name'], description=s['description'], inputSchema=s['parameters'],
                     annotations=types.ToolAnnotations(readOnlyHint=s['name'] not in QQ_WRITES and s['name'] not in CHAT_TOOLS and s['name'] not in MEDIA_WRITES and s['name'] not in ('prepare_file', 'download_file', 'transcribe_voice', 'read_qq_group', 'get_group_knowledge','send_qq_message','manage_qq_group'),
                         destructiveHint=s['name'] in ('manage_qq_group','qq_group_action','qq_message_action','qq_file_action','qq_friend_action','qq_qzone_action','qq_album_action'), openWorldHint=s['name'] in QQ_WRITES-{'import_qq_media'} or s['name'] in ('send_qq_message','manage_qq_group','send_chat_reply','send_chat_message','send_chat_sticker','collect_chat_sticker','react_to_chat_message'))) for s in rows]
@@ -70,14 +71,14 @@ class MCPService:
             try:
                 # Worker IO is bounded by the underlying SQL/parser/ASR limits.
                 # On disconnect/cancellation don't orphan disclosure or reset quota.
-                with anyio.fail_after(240):
+                with anyio.fail_after(1260 if name in ('download_chat_file','send_chat_file') else 240):
                     # Isolate long polls from Starlette's shared thread pool too.
-                    if name=='wait_chat_messages' and self.wait_limiter is None:
+                    if name in CHAT_WAIT_TOOLS and self.wait_limiter is None:
                         self.wait_limiter=anyio.CapacityLimiter(16)
                     if name in MEDIA_TOOLS and self.media_limiter is None:
                         self.media_limiter=anyio.CapacityLimiter(4)
                     return await anyio.to_thread.run_sync(self.tools.call, token, name, arguments, cancel, self.source_base,
-                        abandon_on_cancel=True, limiter=self.wait_limiter if name=='wait_chat_messages' else self.media_limiter if name in MEDIA_TOOLS else None)
+                        abandon_on_cancel=True, limiter=self.wait_limiter if name in CHAT_WAIT_TOOLS else self.media_limiter if name in MEDIA_TOOLS else None)
             except AccessDenied:
                 return self.tools.result(dict(error='连接已失效，请重新授权。'))
             except TimeoutError:
@@ -105,7 +106,7 @@ class MCPService:
                 if not auth.startswith('Bearer '):
                     return await rejected(401)(scope, receive, send)
                 try:
-                    grant = service.access.authorize(auth[7:], source=False)
+                    grant = await anyio.to_thread.run_sync(partial(service.access.authorize, auth[7:], source=False))
                 except AccessDenied:
                     return await rejected(401)(scope, receive, send)
                 # Only authorized image imports may exceed the ordinary 32 KiB

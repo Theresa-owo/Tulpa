@@ -90,6 +90,22 @@ def install_mcp_routes(app, store=None):
         except GrantConflict as exc:raise HTTPException(409, str(exc)) from None
         except ValueError as exc:raise HTTPException(400, str(exc)) from None
 
+    @app.get('/api/mcp/connections/{gid}/groups')
+    def authorized_group_choices(gid: str, request: Request):
+        local(request)
+        from .mcp_scope_edit import GroupScopeEditor
+        try:return GroupScopeEditor(access).listed(gid)
+        except GrantConflict as exc:raise HTTPException(409, str(exc)) from None
+        except ValueError as exc:raise HTTPException(400, str(exc)) from None
+
+    @app.post('/api/mcp/connections/{gid}/groups')
+    def add_authorized_groups(gid: str, request: Request, body: dict):
+        local(request, True)
+        from .mcp_scope_edit import GroupScopeEditor
+        try:return GroupScopeEditor(access).add(gid, body)
+        except GrantConflict as exc:raise HTTPException(409, str(exc)) from None
+        except ValueError as exc:raise HTTPException(400, str(exc)) from None
+
     def token_for(body, *, extra=()):
         if set(body)-{'token',*extra} or not isinstance(body.get('token'),str):raise HTTPException(400,'连接凭据字段无效。')
         try:return access.authorize(body['token'])

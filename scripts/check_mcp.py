@@ -195,7 +195,10 @@ async def optional_tools(url, service, store, folder):
                 assert seen==mids, 'Dense pages skipped messages'
         with patch.object(service.tools,'onebot',return_value=None):
             async with client(url,token) as c:
-                assert 'get_group_knowledge' not in {s.name for s in (await c.list_tools()).tools}
+                # Schemas describe the grant, not transient OneBot health. Offline
+                # probes must not delay unrelated history reads or hide tools.
+                assert 'get_group_knowledge' in {s.name for s in (await c.list_tools()).tools}
+                assert (await c.call_tool('read_qq_group',dict(conversation_id=cid,view='members'))).isError
     gid=service.access.authorize(token)['id']
     for _ in range(12):service.access.begin_call(gid,'prepare_file')
     async with client(url,token) as c:

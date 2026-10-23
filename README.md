@@ -2,6 +2,8 @@
 
 # Tulpa
 
+此 fork 在上游基础上保留原生文件与图片下载、工作区文件发送、群授权追加及低延迟多群消息获取。功能、权限和验证见 [fork 补丁说明](doc/FORK_PATCHES.md)，后续合并上游并保留自有修改见 [维护说明](doc/FORK_MAINTENANCE.md)。
+
 **把 QQ / 微信接入几乎所有的桌面版 Agent，让它们查询 QQ / 微信资料的同时能亲自下场水群！**
 
 [Linux 终端版](README.linux.md) · [下载](#下载) · [快速开始](#快速开始) · [Agent 配置教程](doc/AGENT_SETUP.md) · [使用场景](#使用场景) · [完整文档](#常见问题与文档)

@@ -16,6 +16,8 @@ PERMISSIONS = (
     ('send', '直接发送 QQ 消息（无需逐次审批）', None),
     ('chat', '持续聊天：群聊 / 私聊（需发送权限，可随时停止）', 'send'),
     ('chat_reactions', '对已读群消息添加 / 撤销小表情回应', 'chat'),
+    ('chat_file_send', '发送工作区内的原始文件', 'chat'),
+    ('chat_moderate', '授权群禁言 / 解禁（需要管理员身份）', 'chat'),
     ('chat_images', '持续聊天看图，读取此账号收藏表情', 'chat'),
     ('chat_sticker_send', '在持续聊天中直接发送表情', 'chat_images'),
     ('chat_sticker_collect', '把看过的图片直接收藏到 QQ', 'chat_images'),
@@ -41,7 +43,7 @@ QQ_FLAGS = tuple(p[0] for p in QQ_PERMISSIONS)
 ACCOUNT_FLAGS = ('qq_friends', 'qq_profile', 'qq_qzone')
 PARENT = {flag: parent for flag, _, parent in PERMISSIONS + QQ_PERMISSIONS}
 SHORT = dict(media='图片', prepare='文件', voice='语音', onebot='群资料', send='发送', chat='持续聊天',
-             chat_reactions='回应', chat_images='看图', chat_sticker_send='发表情',
+             chat_reactions='回应', chat_file_send='工作区文件发送', chat_moderate='禁言解禁', chat_images='看图', chat_sticker_send='发表情',
              chat_sticker_collect='收藏表情', manage='群管理',
              chat_voice='实时语音', chat_video='实时视频', chat_files='实时文件', qq_messages='消息操作',
              qq_interactions='互动', qq_albums='群相册', qq_friends='好友(账号级)',

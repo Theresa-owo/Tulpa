@@ -12,10 +12,12 @@ from .retrieval import Plan, date_bound
 from .mcp_qq_permissions import QQ_FLAGS, MEDIA_FLAGS as ATTACHMENT_FLAGS, live_grant
 
 CHAT_MEDIA_FLAGS = ('chat_images', 'chat_sticker_send', 'chat_sticker_collect')
-CHAT_EXTRA_FLAGS = ('chat_reactions',)
+CHAT_EXTRA_FLAGS = ('chat_reactions', 'chat_file_send', 'chat_moderate')
 PERMISSION_FLAGS = ('media', 'prepare', 'voice', 'onebot', 'send', 'manage', 'chat',
                     *CHAT_MEDIA_FLAGS, *CHAT_EXTRA_FLAGS, *QQ_FLAGS)
-CHAT_MEDIA_TOOLS = ('read_chat_image','import_chat_image','list_chat_stickers','read_chat_sticker','note_chat_sticker','send_chat_sticker','collect_chat_sticker')
+CHAT_MEDIA_TOOLS = ('read_chat_image','import_chat_image','list_chat_stickers','read_chat_sticker','note_chat_sticker','send_chat_sticker','collect_chat_sticker',
+                    'prepare_local_image','download_chat_image','list_chat_files','download_chat_file','send_chat_file','moderate_chat_member')
+CHAT_WAIT_TOOLS = ('wait_chat_messages', 'wait_chat_messages_many')
 
 DEFAULT_PORT = 18777
 
@@ -50,6 +52,7 @@ class MCPAccess:
                     at REAL NOT NULL, status TEXT NOT NULL, seconds REAL NOT NULL DEFAULT 0,
                     messages INTEGER NOT NULL DEFAULT 0);
                 CREATE INDEX IF NOT EXISTS calls_budget ON calls(grant_id,tool,at);
+                CREATE INDEX IF NOT EXISTS calls_recent ON calls(grant_id,at,tool);
             ''')
             if 'revision' not in {r[1] for r in db.execute('PRAGMA table_info(grants)')}:
                 db.execute('ALTER TABLE grants ADD COLUMN revision INTEGER NOT NULL DEFAULT 0')
@@ -171,6 +174,8 @@ class MCPAccess:
             raise ValueError('持续聊天需要同时允许直接发送 QQ 消息。')
         if scope.get('chat_reactions') and not scope.get('chat'):
             raise ValueError('消息表情回应需要开启持续群聊及发送权限。')
+        if (scope.get('chat_file_send') or scope.get('chat_moderate')) and not scope.get('chat'):
+            raise ValueError('工作区文件发送和禁言/解禁需要开启持续聊天及发送权限。')
         if any(scope.get(k) for k in CHAT_MEDIA_FLAGS) and not scope.get('chat'):
             raise ValueError('表情包子功能需要开启持续群聊。')
         if (scope.get('chat_sticker_send') or scope.get('chat_sticker_collect')) and not scope.get('chat_images'):
@@ -278,10 +283,15 @@ class MCPAccess:
         # Per-page processing limits, not an artificial task-wide message cap.
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
-            limit = {'prepare_file': 12, 'download_file': 12, 'transcribe_voice': 12, 'read_image': 60,
+            limit = {'prepare_file': 12, 'download_file': 12, 'download_chat_file': 12, 'download_chat_image': 12,
+                     'prepare_local_image': 60, 'transcribe_voice': 12, 'read_image': 60,
                      'import_qq_media':30,'read_chat_attachment':60,
                      'read_chat_image':60,'read_chat_sticker':60,'import_chat_image':60,'collect_chat_sticker':12}.get(tool)
             group = ('prepare_file','download_file') if tool in ('prepare_file','download_file') else ('read_chat_image','read_chat_sticker') if tool in ('read_chat_image','read_chat_sticker') else (tool,)
+            if tool in ('download_chat_file','download_chat_image'):
+                group = ('download_chat_file','download_chat_image')
+            elif tool in ('read_chat_image','read_chat_sticker','prepare_local_image'):
+                group = ('read_chat_image','read_chat_sticker','prepare_local_image')
             if limit and db.execute('SELECT count(*) FROM calls WHERE grant_id=? AND tool IN ('+','.join('?' for _ in group)+') AND at>?',
                                     (gid, *group, time.time()-3600)).fetchone()[0] >= limit:
                 raise RateLimited('本连接已达到该按需处理工具的每小时上限；请稍后继续。')
@@ -290,8 +300,8 @@ class MCPAccess:
             placeholders = ','.join('?' for _ in CHAT_MEDIA_TOOLS)
             if tool != 'stop_chat_session' and db.execute(f"SELECT count(*) FROM calls WHERE grant_id=? AND at>? AND tool!='stop_chat_session' AND tool {family} ({placeholders})", (gid, time.time()-60, *CHAT_MEDIA_TOOLS)).fetchone()[0] >= 120:
                 raise RateLimited('本连接请求过于频繁，请稍后继续。')
-            if tool=='send_chat_sticker' and db.execute("SELECT count(*) FROM calls WHERE grant_id=? AND tool=? AND at>?",(gid,tool,time.time()-60)).fetchone()[0]>=12:
-                raise RateLimited('表情发送过于频繁，请稍后继续；普通聊天不受影响。')
+            if tool in ('send_chat_sticker','send_chat_file','moderate_chat_member') and db.execute("SELECT count(*) FROM calls WHERE grant_id=? AND tool=? AND at>?",(gid,tool,time.time()-60)).fetchone()[0]>=12:
+                raise RateLimited('该媒体或管理操作过于频繁，请稍后继续；普通聊天不受影响。')
             return db.execute('INSERT INTO calls(grant_id,tool,at,status) VALUES(?,?,?,?)',
                               (gid, tool, time.time(), 'running')).lastrowid
 

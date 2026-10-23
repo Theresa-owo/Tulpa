@@ -7,12 +7,13 @@ const root=path.resolve(packageArg<0?path.join(__dirname,'..'):process.argv[pack
 const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP UI fixture</title>
 <link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/mcp.css"><link rel="stylesheet" href="/tulpa.css"><link rel="stylesheet" href="/desktop.css"><button id="open-mcp">外部 Agent / MCP</button><button id="open-data">导入</button><script src="/mcp.js"></script></html>`;
 (async()=>{
-  const browser=await chromium.launch({channel:'msedge',headless:true});
+  const browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL||'msedge',headless:true});
   try{
     const page=await browser.newPage({viewport:{width:1100,height:920}}),errors=[];
     page.on('pageerror',e=>errors.push(e.message));
     let state,requests,mode,failList=false,delayCreate=false,sessions=[],overviewError=false,libraryError=false,libraryDelay=false,stopError=false,learningState='积累中',learning={enabled:true};
-    let connections=[];
+    let connections=[],groupRevision='scope-v0',groupFailure=false,delayGroupAdd=false;
+    const groupChoices=()=>[{group_id:'222',name:'既有群',authorized:true},{group_id:'444',name:'待新增群甲',authorized:false},{group_id:'555',name:'待新增群乙 <img src=x onerror=alert(1)>',authorized:false}];
     const group=()=>({conversation_id:'111:group:444',account:'111',group:'444',name:'合成测试群',active:sessions.filter(s=>s.active),history:sessions.filter(s=>!s.active),learning,learning_state:learningState,can_start:!sessions.some(s=>s.active),connection_id:'fixture-connection'});
     const shot=async name=>{if(process.env.AUTO_LEARNING_SCREENSHOT_DIR){fs.mkdirSync(process.env.AUTO_LEARNING_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.AUTO_LEARNING_SCREENSHOT_DIR,name+'.png')});}};
     await page.route('http://127.0.0.1:39879/**',async route=>{
@@ -27,6 +28,7 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
       if(url.pathname==='/api/mcp/conversations')return reply({items:[{platform:'qq',conversation_id:'111:group:222',name:'测试会话',count:3},{platform:'wechat',conversation_id:'fixture@chatroom',name:'合成微信班级群',count:2}].filter(item=>item.name.includes(url.searchParams.get('query')||'')),has_more:false,next_offset:80});
       if(url.pathname==='/api/mcp/live-groups')return reply({items:[{platform:'qq',conversation_id:'111:group:444',name:'未导入的实时群',count:'OneBot'}]});
       if(url.pathname==='/api/mcp/live-friends')return reply({items:[{platform:'qq',conversation_id:'111:direct:555',name:'未导入的好友',count:'OneBot'}]});
+      if(url.pathname==='/api/mcp/connections/scope-fixture/groups'&&method==='GET')return reply({items:groupChoices(),scope:connections[0].scope,revision:groupRevision});
       if(url.pathname==='/api/desktop/preferences')return reply({background:false});
       if(url.pathname==='/api/desktop/status')return reply({owned:true});
       if(url.pathname==='/api/mcp/chats'&&method==='GET')return reply({sessions,receiver:{state:'connected',note:'SnowLuma 实时事件已连接。'}});
@@ -38,6 +40,13 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
       if(url.pathname==='/api/mcp/chat-personas')return reply({personas:[{id:'little_whale',name:'小鲸鱼'},{id:'little_whale_v2',name:'小鲸鱼2号'}]});
       if(url.pathname.endsWith('/learning')&&method==='GET')return reply(learning);
       const body=r.postDataJSON();requests.push({path:url.pathname,method,body});
+      if(url.pathname==='/api/mcp/connections/scope-fixture/groups'&&method==='POST'){
+        if(delayGroupAdd)await new Promise(resolve=>setTimeout(resolve,150));
+        if(groupFailure||body.revision!==groupRevision)return reply({detail:'连接授权已改变，请重新加载后确认。'},409);
+        const added=groupChoices().filter(item=>body.group_ids.includes(item.group_id)&&!item.authorized);
+        connections[0].scope.conversations.push(...added.map(item=>JSON.stringify(['qq','111:group:'+item.group_id])));groupRevision='scope-v1';
+        return reply({added,conversations:connections[0].scope.conversations.length,revision:1});
+      }
       if(url.pathname==='/api/mcp/connections/fixture-only/codex'&&method==='POST'){
         if(body.server_name==='tulpa')return reply({detail:'Codex 已有名为 tulpa 的其他连接，请修改 MCP 名称后重试。'},409);
         return reply({installed:true,changed:true});
@@ -73,7 +82,7 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
     });
     const waitText=(id,text)=>page.waitForFunction(([id,text])=>document.getElementById(id).textContent.includes(text),[id,text]);
     async function setup(running=false){
-      state={enabled:running,running,port:18777,url:'http://127.0.0.1:18777/mcp',error:''};requests=[];mode='ok';failList=false;delayCreate=false;sessions=[];connections=[];
+      state={enabled:running,running,port:18777,url:'http://127.0.0.1:18777/mcp',error:''};requests=[];mode='ok';failList=false;delayCreate=false;sessions=[];connections=[];groupRevision='scope-v0';groupFailure=false;delayGroupAdd=false;
       await page.goto('http://127.0.0.1:39879/');await page.locator('#open-mcp').click();await page.locator('#mcp-chats input').first().waitFor();
       await page.locator('#mcp-name').fill('qqmcp');await page.locator('#mcp-all').check();
       await page.locator('#mcp-start').fill('2026-09-01');await page.locator('#mcp-end').fill('2026-10-03');
@@ -84,7 +93,7 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
     if(process.env.MCP_UI_SCREENSHOT){await page.locator('#mcp-create').scrollIntoViewIfNeeded();await page.screenshot({path:process.env.MCP_UI_SCREENSHOT});}
     await create();
     assert.deepEqual(requests.map(x=>x.method+' '+x.path),['PUT /api/mcp','POST /api/mcp/connections']);
-    assert.deepEqual(requests[1].body,{name:'qqmcp',platforms:['qq','wechat'],conversations:[],all_conversations:true,start:'2026-09-01',end:'2026-10-03',media:false,prepare:false,voice:false,onebot:false,send:false,manage:false,chat:false,chat_reactions:false,chat_images:false,chat_sticker_send:false,chat_sticker_collect:false});
+    assert.deepEqual(requests[1].body,{name:'qqmcp',platforms:['qq','wechat'],conversations:[],all_conversations:true,start:'2026-09-01',end:'2026-10-03',media:false,prepare:false,voice:false,onebot:false,send:false,manage:false,chat:false,chat_reactions:false,chat_images:false,chat_sticker_send:false,chat_sticker_collect:false,chat_files:false,chat_file_send:false,chat_moderate:false});
     // Stale offline UI must recheck; it should not reconfigure an already running service.
     await setup();state.running=state.enabled=true;await create();assert.equal(requests.length,1);assert.equal(requests[0].method,'POST');
     // Stale online UI must ask explicitly before turning a now stopped service back on.
@@ -109,7 +118,9 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
     await setup(true);assert.equal(await page.locator('#mcp-chat').isChecked(),false);
     assert.equal(await page.locator('#mcp-chat_images').isEnabled(),false);
     assert.equal(await page.locator('#mcp-chat_reactions').isEnabled(),false);
+    for(const flag of ['chat_files','chat_file_send','chat_moderate'])assert.equal(await page.locator('#mcp-'+flag).isEnabled(),false);
     await page.locator('#mcp-chat').check();assert.equal(await page.locator('#mcp-send').isChecked(),true);
+    for(const flag of ['chat_files','chat_file_send','chat_moderate']){assert.equal(await page.locator('#mcp-'+flag).isEnabled(),true);await page.locator('#mcp-'+flag).check();}
     assert.equal(await page.locator('#mcp-chat_images').isEnabled(),true);
     assert.equal(await page.locator('#mcp-chat_reactions').isEnabled(),true);
     assert.equal(await page.locator('#mcp-chat_reactions').isChecked(),false);
@@ -119,6 +130,7 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
     await page.locator('#mcp-send').uncheck();assert.equal(await page.locator('#mcp-chat').isChecked(),false);
     assert.equal(await page.locator('#mcp-chat_sticker_send').isChecked(),false);
     assert.equal(await page.locator('#mcp-chat_reactions').isChecked(),false);
+    for(const flag of ['chat_files','chat_file_send','chat_moderate']){assert.equal(await page.locator('#mcp-'+flag).isChecked(),false);assert.equal(await page.locator('#mcp-'+flag).isEnabled(),false);}
     assert.equal(await page.locator('#mcp-chat_sticker_collect').isEnabled(),false);
     await page.locator('#mcp-chat').check();await page.locator('#mcp-chat_images').check();await page.locator('#mcp-chat_sticker_send').check();await create();assert.equal(requests[0].body.chat,true);
     assert.equal(requests[0].body.chat_images,true);assert.equal(requests[0].body.chat_sticker_send,true);assert.equal(requests[0].body.chat_sticker_collect,false);
@@ -201,6 +213,42 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
     await page.locator('#mcp-qq').uncheck();await waitText('mcp-selection','已选择 0');
     assert.equal(await page.locator('#mcp-source').inputValue(),'history');
     assert.equal(await page.locator('#mcp-source option[value=friends]').isDisabled(),true);
+    // Additive group authorization is explicit, bounded, single-flight and never creates a credential/session.
+    await setup(true);
+    const scope={platforms:['qq'],conversations:[JSON.stringify(['qq','111:group:222'])],start:'2026-01-01',end:'',chat_account:'111',send:true,chat:true,chat_files:true,chat_file_send:true,chat_moderate:false};
+    connections=[{id:'scope-fixture',name:'保留凭证测试连接',revoked:false,valid:true,scope,accounts:{qq:'111'},calls:0}];
+    await page.locator('#mcp-close').click();await page.locator('#open-mcp').click();
+    await page.getByRole('button',{name:'添加授权群',exact:true}).click();
+    const groupEditor=page.locator('[data-group-editor]');
+    await groupEditor.getByText('现有权限：',{exact:false}).waitFor();
+    assert.ok((await groupEditor.textContent()).includes('直接发送：已开启'));
+    assert.ok((await groupEditor.textContent()).includes('禁言 / 解禁：关闭'));
+    assert.equal(await groupEditor.getByRole('checkbox',{name:'既有群（222） · 已授权',exact:true}).isDisabled(),true);
+    const groupInput=groupEditor.getByRole('textbox'),groupSubmit=groupEditor.getByRole('button');
+    await groupInput.fill('999:group:444');assert.equal(await groupSubmit.isDisabled(),true);
+    await groupInput.fill('111:direct:333');assert.equal(await groupSubmit.isDisabled(),true);
+    await groupInput.fill('777');assert.equal(await groupSubmit.isDisabled(),true);
+    assert.equal(requests.length,0);
+    await groupInput.fill('444, 555 444');
+    assert.equal(await groupSubmit.textContent(),'确认添加 2 个群至「保留凭证测试连接」');
+    assert.ok((await groupEditor.textContent()).includes('待新增群甲（444）'));
+    assert.ok((await groupEditor.textContent()).includes('待新增群乙 <img src=x onerror=alert(1)>（555）'));
+    assert.equal(await groupEditor.locator('img').count(),0);
+    groupFailure=true;await groupSubmit.click();await waitText('mcp-error','连接授权已改变');
+    assert.equal(connections[0].scope.conversations.length,1);assert.equal(await groupSubmit.isEnabled(),true);
+    groupFailure=false;delayGroupAdd=true;requests=[];
+    await groupEditor.locator('form').evaluate(form=>{form.requestSubmit();form.requestSubmit();});
+    await waitText('mcp-error','已添加授权群');
+    assert.deepEqual(requests.map(r=>r.method+' '+r.path),['POST /api/mcp/connections/scope-fixture/groups']);
+    assert.deepEqual(requests[0].body,{group_ids:['444','555'],revision:'scope-v0'});
+    assert.deepEqual(connections[0].scope,{...scope,conversations:[JSON.stringify(['qq','111:group:222']),JSON.stringify(['qq','111:group:444']),JSON.stringify(['qq','111:group:555'])]});
+    assert.equal(await page.locator('#mcp-secret').isVisible(),false);
+    // A directory selection supports the same explicit preview without typing a number.
+    await setup(true);connections=[{id:'scope-fixture',name:'目录勾选连接',revoked:false,valid:true,scope:{...scope,conversations:[JSON.stringify(['qq','111:group:222'])]},accounts:{qq:'111'},calls:0}];
+    await page.locator('#mcp-close').click();await page.locator('#open-mcp').click();await page.getByRole('button',{name:'添加授权群',exact:true}).click();
+    await page.locator('[data-group-editor]').getByRole('checkbox',{name:'待新增群甲（444）',exact:true}).check();
+    assert.equal(await page.locator('[data-group-editor]').getByRole('button').textContent(),'确认添加 1 个群至「目录勾选连接」');
+    assert.equal(requests.length,0);
     await setup(true);
 
     // Display literal persona, preserve expanded details across polling, stop one/all.
@@ -270,6 +318,6 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
     await page.locator('#mcp-chat-close').click();assert.equal(await page.locator('#mcp-chat-manager').isVisible(),false);
     assert.equal(requests.filter(r=>r.path==='/api/mcp/chats/start').length,0);
     assert.deepEqual(errors,[]);
-    console.log('PASS: real Edge + actual MCP UI; compact connection, separate manager, no UI start, Agent-created sessions, existing connection/permissions, grouped library, threshold/unknown time, records, pause, literal long content, learning/stop, visible stop errors, auto refresh, error recovery, empty/narrow, Escape/focus. API fixtures only.');
+    console.log(`PASS: real ${process.env.PLAYWRIGHT_CHANNEL||'msedge'} browser + actual MCP UI; additive group preview/selection, explicit single-flight save, invalid inputs and conflicts, file/mute permission controls; compact connection, separate manager, no UI start, Agent-created sessions, existing connection/permissions, grouped library, threshold/unknown time, records, pause, literal long content, learning/stop, visible stop errors, auto refresh, error recovery, empty/narrow, Escape/focus. API fixtures only.`);
   }finally{await browser.close();}
 })().catch(error=>{console.error(error);process.exitCode=1;});

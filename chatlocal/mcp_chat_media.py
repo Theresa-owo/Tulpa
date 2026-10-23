@@ -22,6 +22,7 @@ import ssl
 import threading
 import time
 import uuid
+from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 
 from mcp import types
@@ -41,17 +42,24 @@ MEDIA_TOOLS = {
     'read_chat_image': 'chat_images', 'list_chat_stickers': 'chat_images',
     'read_chat_sticker': 'chat_images', 'note_chat_sticker': 'chat_images',
     'import_chat_image': 'chat_sticker_send',
+    'prepare_local_image': 'chat_sticker_send', 'download_chat_image': 'chat_images',
+    'list_chat_files': 'chat_files', 'download_chat_file': 'chat_files',
+    'send_chat_file': 'chat_file_send', 'moderate_chat_member': 'chat_moderate',
     'send_chat_sticker': 'chat_sticker_send', 'collect_chat_sticker': 'chat_sticker_collect',
 }
-MEDIA_WRITES = {'import_chat_image', 'send_chat_sticker', 'collect_chat_sticker', 'note_chat_sticker'}
+MEDIA_WRITES = {'import_chat_image', 'send_chat_sticker', 'collect_chat_sticker', 'note_chat_sticker', 'send_chat_file', 'moderate_chat_member'}
 MAX_BYTES = 6 * 1024 * 1024
 MAX_BASE64_LENGTH = 4 * ((MAX_BYTES + 2) // 3)
 CACHE_BYTES = 128 * 1024 * 1024
 
 
 def schemas(tool, scope):
+    from .mcp_chat_files import schemas as file_schemas
+    from .mcp_chat_operations import schemas as operation_schemas
+    files = file_schemas(tool) if scope.get('chat') and scope.get('send') and scope.get('chat_files') else []
+    if scope.get('chat') and scope.get('send'): files += operation_schemas(tool,scope)
     if not (scope.get('chat') and scope.get('send') and scope.get('chat_images')):
-        return []
+        return files
     sid = dict(session_id=dict(type='string', minLength=32, maxLength=32))
     asset = dict(**sid, sticker_id=dict(type='string', minLength=32, maxLength=32))
     key = dict(idempotency_key=dict(type='string', minLength=8, maxLength=80))
@@ -60,6 +68,11 @@ def schemas(tool, scope):
                  emotion=dict(type='string', maxLength=80), usage=dict(type='string', maxLength=160),
                  avoid=dict(type='string', maxLength=160), uncertainty=dict(type='string', maxLength=160))
     rows = [
+        tool('prepare_local_image', '读取本机工作区 outgoing-images 中的图片原字节，返回实际像素及 sticker_id。仅接受 PNG/JPEG/GIF/WebP 文件名，不接受路径/URL；不会自动发送。核对预览后按原有规划发送表情。',
+             dict(**sid, filename=dict(type='string', minLength=1, maxLength=180)), ['session_id', 'filename']),
+        tool('download_chat_image', '将当前会话图片的原始字节保存到本机工作区 downloads/qq-images，返回 local_path、SHA256、大小和实际表示。用 event_id 和 index 或已读取的 sticker_id；保留 GIF 动画。prefer_original 仅请求更清晰原件，返回结果可能仍是缩略图。不会发送或解析图片文字。',
+             dict(**sid, event_id=dict(type='integer', minimum=1), index=dict(type='integer', minimum=0, maximum=7, default=0),
+                  sticker_id=dict(type='string', minLength=32, maxLength=32), prefer_original=dict(type='boolean', default=False)), ['session_id']),
         tool('import_chat_image', '导入外部生成或用户提供的图片，返回预览像素和本会话的 sticker_id；仅保存图片，不会发到 QQ。data_base64 是原图的纯 Base64，不接受路径、URL 或 data: 前缀。支持 PNG/JPEG/GIF/WebP，原图最多6 MiB；相同图片重复导入返回相同编号。核对预览后用 plan_chat_reply(expressions=["sticker"]) → send_chat_reply 或 send_chat_sticker 发送。',
              dict(**sid, data_base64=dict(type='string', minLength=4, maxLength=MAX_BASE64_LENGTH)), ['session_id', 'data_base64']),
         tool('read_chat_image', '读取当前持续聊天事件中的图片/表情包，直接向外部模型返回像素；动图最多3个采样帧。event_id 是 wait_chat_messages 的 id，index 是 image_index。未看图不可猜内容。',
@@ -75,7 +88,7 @@ def schemas(tool, scope):
         tool('collect_chat_sticker', '选择值得留的已看过图片，默认同时 QQ 收藏和本地保留；save_qq=false 只留本地，save_local=false 只做 QQ 收藏。可同时写 description/tags/emotion/usage/avoid/uncertainty；返回三者独立状态。需要收藏授权，不自动全收。UNKNOWN 不自动重试。',
              dict(**asset, **key, **notes, save_local=dict(type='boolean',default=True),save_qq=dict(type='boolean',default=True)), ['session_id', 'sticker_id', 'idempotency_key']),
     ]
-    return [r for r in rows if scope.get(MEDIA_TOOLS[r['name']])]
+    return files+[r for r in rows if scope.get(MEDIA_TOOLS[r['name']])]
 
 
 def image_ref(data):
@@ -257,6 +270,23 @@ def clean(value, limit=200):
     return ' '.join(''.join(c for c in str(value) if c.isprintable() or c.isspace()).split())[:limit]
 
 
+def local_image_bytes(folder, filename):
+    from .native_file_transfer import source_file
+    path = source_file(folder,filename)
+    if Path(filename).suffix.lower() not in ('.png','.jpg','.jpeg','.gif','.webp'):
+        raise ValueError('请提供 outgoing-images 内的 PNG/JPEG/GIF/WebP 文件名。')
+    with path.open('rb') as stream:
+        before = os.fstat(stream.fileno())
+        if before.st_nlink != 1: raise ValueError('图片不能是硬链接。')
+        if before.st_size > MAX_BYTES: raise ValueError('图片超过单张 6 MiB 上限。')
+        raw = stream.read(MAX_BYTES+1)
+        after = os.fstat(stream.fileno())
+    if (before.st_size,before.st_mtime_ns) != (after.st_size,after.st_mtime_ns):
+        raise ValueError('图片正在变化，请保存完成后再读取。')
+    pixels(raw,validate_only=True)
+    return raw
+
+
 class ChatMedia:
     def __init__(self, chat):
         self.chat, self.access, self.actions = chat, chat.access, chat.actions
@@ -296,7 +326,8 @@ class ChatMedia:
     def guard(self, grant, sid, name, cancel):
         self.access.ensure_revision(grant)
         current, row = self.chat.validate(sid, grant['id'])
-        if not current['scope'].get('chat_images') or not current['scope'].get(MEDIA_TOOLS[name]):
+        if ((MEDIA_TOOLS[name] not in ('chat_files','chat_file_send','chat_moderate') and not current['scope'].get('chat_images'))
+                or not current['scope'].get(MEDIA_TOOLS[name])):
             raise ValueError('此连接没有该持续聊天表情权限，请在界面重新授权。')
         observed=self.chat.receiver.status()
         if observed.get('state')=='connected' and observed.get('account')!=row['conversation_id'].split(':')[0]:
@@ -735,8 +766,58 @@ class ChatMedia:
             if detail and detail.get('state')=='recalled':raise ValueError('被引用的原消息已撤回，未读取图片。')
         return refs[index]
 
+    def download_image(self, grant, row, args, cancel):
+        from .native_file_transfer import checked_directory, workspace
+        if bool(args.get('event_id')) == bool(args.get('sticker_id')):
+            raise ValueError('只选择 event_id 或 sticker_id 一种定位方式。')
+        sid = row['id']
+        ref = None
+        if args.get('event_id'):
+            ref = self.event_reference(sid,args)
+            aid = self.upsert(sid,f'event:{args["event_id"]}:{args.get("index",0)}',ref)
+        else:
+            aid = args['sticker_id']
+            if not self.asset(sid,aid)['seen']: raise ValueError('请先读取该表情，再下载原字节。')
+        asset = self.asset(sid,aid)
+        raw = self.bytes(row,asset,cancel,prefer_original=args.get('prefer_original',False))
+        info,_ = pixels(raw)
+        digest = hashlib.sha256(raw).hexdigest()
+        destination = checked_directory(workspace(self.access.path.parent)/'downloads'/'qq-images',create=True)
+        suffix = {'PNG':'.png','JPEG':'.jpg','GIF':'.gif','WEBP':'.webp'}[info['format']]
+        path, temp = destination/(digest+suffix), destination/(uuid.uuid4().hex+'.partial')
+        def check():
+            self.guard(grant,sid,'download_chat_image',cancel)
+            if ref is not None and self.event_reference(sid,args) != ref: raise ValueError('图片所属消息已变化。')
+        try:
+            with temp.open('xb') as out: out.write(raw)
+            check()
+            checked_directory(destination)
+            os.replace(temp,path)
+            check()
+        finally: temp.unlink(missing_ok=True)
+        return dict(sticker_id=aid,local_path=str(path.resolve()),sha256=digest,size=len(raw),**info,
+                    representation=asset.get('_source_info',{}),downloaded=True,parsed=False,
+                    note='已保留当前可读取表示的原字节及动画；原图/缩略图状态见 representation。'), []
+
     def call(self, grant, name, args, cancel):
         row=self.guard(grant,args['session_id'],name,cancel);sid=row['id']
+        if name in ('send_chat_file','moderate_chat_member'):
+            from .mcp_chat_operations import ChatOperations
+            return ChatOperations(self).call(grant,name,args,cancel)
+        if name in ('list_chat_files','download_chat_file'):
+            from .mcp_chat_files import ChatFiles
+            return ChatFiles(self).call(grant,name,args,cancel)
+        if name == 'download_chat_image': return self.download_image(grant,row,args,cancel)
+        if name == 'prepare_local_image':
+            from .native_file_transfer import workspace
+            raw = local_image_bytes(workspace(self.access.path.parent)/'outgoing-images',args['filename'])
+            self.guard(grant,sid,name,cancel)
+            digest = self.store_bytes(raw)
+            aid = self.upsert(sid,'upload:'+digest,{},'Local image')
+            with self.access.connect() as db:
+                db.execute('UPDATE chat_media_assets SET digest=? WHERE id=?',(digest,aid))
+            result,frames = self.read(grant,row,aid,name,cancel)
+            return dict(**result,filename=args['filename'],sha256=digest),frames
         if name=='import_chat_image':return self.import_image(grant,row,args,cancel)
         if name=='read_chat_image':return self.event_image(grant,args,cancel)
         if name=='list_chat_stickers':return self.listed(grant,row,args,cancel)

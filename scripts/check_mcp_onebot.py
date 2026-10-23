@@ -44,13 +44,17 @@ class Fixture(BaseHTTPRequestHandler):
         self.send_response(200);self.send_header('Content-Type','application/json');self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
 
 
-async def read_notice(url,token):
+async def read_notice(url,token,*,offline=False):
     async with httpx.AsyncClient(headers={'Authorization':'Bearer '+token},trust_env=False) as http:
         async with streamable_http_client(url,http_client=http) as (read,write,_):
             async with ClientSession(read,write) as client:
                 await client.initialize()
                 names={t.name for t in (await client.list_tools()).tools}
                 assert 'get_group_knowledge' in names and 'qq_group_admin' not in names
+                if offline:
+                    result=await client.call_tool('read_qq_group',dict(conversation_id='111:group:222',view='members'))
+                    assert result.isError,result
+                    return
                 result=await client.call_tool('get_group_knowledge',dict(group_id='111:group:222',types=['notice']))
                 assert not result.isError,result
                 assert '共享配置公告验收' in str(result.structuredContent),result
@@ -70,17 +74,21 @@ def main():
                 assert ui.put('/api/mcp',json=dict(enabled=True,port=port),headers=headers).json()['running']
                 created=ui.post('/api/mcp/connections',headers=headers,json=dict(name='Fixture',platforms=['qq'],all_conversations=True,onebot=True)).json()
                 url=service.status()['url'];token=created['token']
-                assert not asyncio.run(test_connection(url,token))['onebot']
+                # Discovery reports granted capabilities without a network probe.
+                assert asyncio.run(test_connection(url,token))['onebot']
+                asyncio.run(read_notice(url,token,offline=True))
                 result=ui.put('/api/desktop/settings',headers=headers,json=dict(sender_url='http://127.0.0.1:'+str(server.server_port),sender_token='fixture-onebot'))
                 assert result.status_code==200 and not result.json()['configured'],result.text
                 assert ui.post('/api/desktop/onebot/test',headers=headers,json={}).json()['ok']
                 assert asyncio.run(test_connection(url,token))['onebot']
                 asyncio.run(read_notice(url,token))
                 assert 'API_KEY' not in (folder/'.env').read_text('utf-8')
-                # Saving a bad token must remove availability without a restart.
+                # Saving a bad token changes live availability without hiding
+                # granted schemas or blocking unrelated history discovery.
                 ui.put('/api/desktop/settings',headers=headers,json=dict(sender_token='incorrect'))
-                assert not asyncio.run(test_connection(url,token))['onebot']
+                assert asyncio.run(test_connection(url,token))['onebot']
                 assert ui.post('/api/desktop/onebot/test',headers=headers,json={}).json()['ok'] is False
+                asyncio.run(read_notice(url,token,offline=True))
     finally:server.shutdown();server.server_close();invalidate_availability()
     assert '_get_group_notice' in Fixture.actions
     print('PASS shared EXE OneBot settings -> live MCP tool visibility -> HTTP notice read; no LLM key, hot token replacement, no sending. Isolated OneBot fixture.')

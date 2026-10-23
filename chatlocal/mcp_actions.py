@@ -71,6 +71,7 @@ class MCPActions:
             else:
                 address = self.sender_factory().prepare(row, False)
             labels = []
+            if address.get('mention_all'):labels.append('真实 @全体成员')
             if address.get('quote_id') is not None:labels.append('引用 QQ 消息 '+str(address['quote_id']))
             if address.get('mention_user_ids'):labels.append('@ '+', '.join(address['mention_user_ids']))
             detail = ('\n'+'；'.join(labels)) if labels else ''
@@ -143,7 +144,12 @@ class MCPActions:
                 if kind=='send':
                     dispatched = True
                     sender=self.sender_factory()
-                    result = sender.send(target,params['text'],prepared,guard=guard) if target_resolver else sender.send(target,params['text'],prepared)
+                    def send_guard():
+                        self.access.ensure_revision(grant)
+                        self.access.by_id(grant['id'], source=False)
+                        if guard:guard()
+                        if cancel.is_set():raise ValueError('调用已取消，未发送。')
+                    result = sender.send(target,params['text'],prepared,guard=send_guard) if target_resolver else sender.send(target,params['text'],prepared)
                 else:
                     dispatched = True
                     self.client_factory().call(prepared['api'],prepared['payload'],approved=True)

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "upstream_repository": "github.com/fumingyang2004/Tulpa",
+  "fork_repository": "github.com/Theresa-owo/Tulpa",
+  "branch": "main",
+  "fork_base_commit": "16e331141439af7b19aaa8aec635eae38ddf33b9",
+  "maintenance_policy": "Merge upstream into the fork; retain local patch history and stop on conflicts.",
+  "patch_areas": [
+    "Native QQ files, image reading and downloads",
+    "Scoped MCP grant editing",
+    "Concurrent MCP reads and event-driven chat waits"
+  ],
+  "required_checks": [
+    "scripts/check_fork_upstream_sync.py",
+    "scripts/check_fork_mcp_parallel.py",
+    "scripts/check_fork_mcp_realtime.py",
+    "scripts/check_fork_native_files.py",
+    "scripts/check_fork_scope_edit.py",
+    "scripts/check_fork_permissions.py",
+    "scripts/check_mcp_downloads.py",
+    "scripts/check_mcp_qq_extensions.py",
+    "scripts/check_publication.py"
+  ]
+}

@@ -62,7 +62,7 @@ def schema(tool):
                     action=dict(type='string',minLength=1,maxLength=80),params=dict(type='object'),
                     event_id=event,reaction_id=dict(type='string',maxLength=64),
                     operation=dict(type='string',enum=['add','remove']),
-                    quote=dict(type='boolean'),mention_user_ids=dict(type='array',maxItems=5,uniqueItems=True,
+                    quote=dict(type='boolean'),mention_all=dict(type='boolean'),mention_user_ids=dict(type='array',maxItems=5,uniqueItems=True,
                         items=dict(type='string',pattern='^[1-9][0-9]{0,19}$'))),required=['kind']))),
         ['session_id','plan_id','bubbles'])]
 
@@ -445,7 +445,7 @@ class ChatTurns:
             if p['state']!='READY':raise TurnRejected('plan_not_ready','该计划不可发送，请读取结果或补读重规划。')
             if not isinstance(bubbles,list) or not 1<=len(bubbles)<=3:raise TurnRejected('invalid_bubbles','一次提交 1–3 个语义气泡。')
             for i,b in enumerate(bubbles):
-                kind=b['kind'];allowed={'text':{'kind','text','quote','mention_user_ids'},'sticker':{'kind','sticker_id'},'reaction':{'kind','event_id','reaction_id','operation'},
+                kind=b['kind'];allowed={'text':{'kind','text','quote','mention_user_ids','mention_all'},'sticker':{'kind','sticker_id'},'reaction':{'kind','event_id','reaction_id','operation'},
                     'voice':{'kind','asset_id'},'video':{'kind','asset_id'},'file':{'kind','asset_id','folder_id'},
                     'ai_voice':{'kind','text','character_id'},'qq_action':{'kind','tool','action','params'}}[kind]
                 if set(b)-allowed or kind not in data['expressions']:raise TurnRejected('expression_mismatch','表达类型或字段与计划不一致。')
@@ -453,7 +453,7 @@ class ChatTurns:
                     'voice':{'asset_id'},'video':{'asset_id'},'file':{'asset_id'},'ai_voice':{'text','character_id'},'qq_action':{'tool','action','params'}}[kind]
                 if required-set(b):raise TurnRejected('expression_mismatch','表达缺少必要内容。')
                 if kind=='reaction' and b['event_id']!=data['target_event_id']:raise TurnRejected('target_mismatch','回应目标与计划不一致。')
-                if kind=='text' and i and (b.get('quote') or b.get('mention_user_ids')):raise TurnRejected('repeated_addressing','同一轮仅首条按需引用或 @；改变目标需重新规划。')
+                if kind=='text' and i and (b.get('quote') or b.get('mention_user_ids') or b.get('mention_all')):raise TurnRejected('repeated_addressing','同一轮仅首条按需引用或 @；改变目标需重新规划。')
                 if kind=='qq_action':
                     from .mcp_qq_catalog import CATALOG
                     from .mcp_qq import OUTBOUND

@@ -23,8 +23,9 @@ def codex_server_name(value):
 
 def codex_config(url, token, scope=None, *, server_name='tulpa'):
     server_name = codex_server_name(server_name)
+    timeout = 1260 if (scope or {}).get('chat_files') else 240
     stanza = ('[mcp_servers.'+server_name+']\nurl = '+json.dumps(url)+'\nhttp_headers = { Authorization = '+
-              json.dumps('Bearer '+token)+' }\ntool_timeout_sec = 240\n')
+              json.dumps('Bearer '+token)+' }\ntool_timeout_sec = '+str(timeout)+'\n')
     for flag,tool in [('send','send_qq_message'),('manage','manage_qq_group')]:
         if (scope or {}).get(flag) is True:
             stanza += f'\n[mcp_servers.{server_name}.tools.{tool}]\napproval_mode = "approve"\n'

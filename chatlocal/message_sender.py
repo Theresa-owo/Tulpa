@@ -52,16 +52,16 @@ class QQSender:
         if parsed.scheme not in ('http','https') or parsed.hostname not in ('127.0.0.1','localhost','::1') or parsed.username or parsed.password or parsed.query or parsed.fragment:
             raise SendError('发送接口必须是不含凭据参数的 localhost HTTP(S) 地址。')
 
-    def call(self,action,payload,*,sending=False):
+    def call(self,action,payload,*,sending=False,timeout_seconds=20):
         from .snowluma_managed import guard
         try:guard(self.config)
         except ValueError:raise SendError('QQ 托管授权、进程或账号绑定已失效，未发送。') from None
-        allowed={'get_login_info','get_group_info','get_group_member_info','get_friend_list','get_group_msg_history','get_friend_msg_history','get_msg'}
+        allowed={'get_login_info','get_group_info','get_group_member_info','get_group_at_all_remain','get_friend_list','get_group_msg_history','get_friend_msg_history','get_msg'}
         if action not in (allowed|({'send_group_msg','send_private_msg'} if sending else set())):raise SendError('接口不在发送适配器白名单中。')
         try:
             with timing.span('onebot.'+action):
                 with timing.span('onebot.client_create'):
-                    client=httpx.Client(timeout=httpx.Timeout(20,connect=4),trust_env=False,follow_redirects=False,transport=self.transport)
+                    client=httpx.Client(timeout=httpx.Timeout(timeout_seconds,connect=4),trust_env=False,follow_redirects=False,transport=self.transport)
                 with client:
                     token=self.config['REPLY_ONEBOT_TOKEN']
                     with timing.span('onebot.http_roundtrip'):
@@ -195,10 +195,26 @@ class QQSender:
                 raise SendError('无法核对 @ 对象仍是当前群的指定成员，未发送。')
         return quote_id
 
+    def check_at_all(self,address):
+        if address['kind'] != 'group': raise SendError('@全体成员只支持已核对的群会话，未发送。')
+        group, account = int(address['peer']), int(address['account'])
+        actor = self.call('get_group_member_info',dict(group_id=group,user_id=account,no_cache=True))
+        if (not isinstance(actor,dict) or str(actor.get('group_id')) != address['peer'] or
+                str(actor.get('user_id')) != address['account'] or actor.get('role') not in ('admin','owner')):
+            raise SendError('当前账号不是该群管理员或群主，不能 @全体成员，未发送。')
+        quota = self.call('get_group_at_all_remain',dict(group_id=group))
+        fields = ('remain_at_all_count_for_group','remain_at_all_count_for_uin')
+        if (not isinstance(quota,dict) or quota.get('can_at_all') is not True or
+                any(type(quota.get(key)) is not int or quota[key] <= 0 for key in fields)):
+            raise SendError('@全体成员不可用、额度不足或返回值无法核对，未发送。')
+
     @timing.stage('send.prepare')
-    def prepare_chat(self,target,*,response_target=None,quote=False,mention_user_ids=()):
+    def prepare_chat(self,target,*,response_target=None,quote=False,mention_user_ids=(),mention_all=False):
+        if type(mention_all) is not bool: raise SendError('mention_all 必须为布尔值，未发送。')
         address=self.check_target(target)
+        if mention_all: self.check_at_all(address)
         return dict(address,chat_send=True,response_target=response_target,mention_user_ids=list(mention_user_ids),
+                    **({'mention_all':True} if mention_all else {}),
                     quote_id=self.chat_targets(address,response_target,quote,mention_user_ids))
 
     @timing.stage('send.adapter')
@@ -212,6 +228,11 @@ class QQSender:
                 raise SendError('引用原消息已变化，未发送。')
         elif quote_id is not None and self.quote_id(target,address)!=quote_id:raise SendError('引用原消息已变化，请重新确认，未发送。')
         segments=[dict(type='at',data=dict(qq=uid)) for uid in mentions]+[dict(type='text',data=dict(text=text))]
+        mention_all = prepared.get('mention_all',False) if prepared.get('chat_send') else False
+        if type(mention_all) is not bool: raise SendError('mention_all 必须为布尔值，未发送。')
+        if mention_all:
+            self.check_at_all(address)
+            segments.insert(0,dict(type='at',data=dict(qq='all')))
         if quote_id is not None:segments.insert(0,dict(type='reply',data=dict(id=str(quote_id))))
         group=address['kind']=='group';key='group_id' if group else 'user_id'
         if guard:guard()
@@ -222,6 +243,7 @@ class QQSender:
                     quote_message_id=quote_id,platform='qq',note='OneBot 已返回发送成功回执。协议发送可能不写入桌面 QQ 的本地记录；此回执不代表客户端已同步。')
         if prepared.get('chat_send'):
             receipt.update(message_segments=segments,mention_user_ids=mentions,
+                           mention_all=mention_all,
                            reply_to_event_id=(prepared.get('response_target') or {}).get('event_id'),
                            segment_source='submitted_to_onebot',
                            display_note='以上为程序提交的消息段。引用是否由 OneBot / QQ 额外显示 @，以实际客户端为准。')
