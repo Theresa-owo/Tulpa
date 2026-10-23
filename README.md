@@ -2,7 +2,7 @@
 
 # Tulpa
 
-**把 QQ / 微信资料接入几乎所有的桌面版 Agent，也让它在 QQ 里成为群友。**
+**把 QQ / 微信接入几乎所有的桌面版 Agent，让它们查询 QQ / 微信资料的同时能亲自下场水群！**
 
 [Linux 终端版](README.linux.md) · [下载](#下载) · [快速开始](#快速开始) · [Agent 配置教程](doc/AGENT_SETUP.md) · [使用场景](#使用场景) · [完整文档](#常见问题与文档)
 
@@ -167,6 +167,10 @@ cd Tulpa
 
 Tulpa 自有代码采用 [MIT License](LICENSE)，第三方组件、模型与客户端遵循各自许可，见 [THIRD_PARTY.md](doc/THIRD_PARTY.md)。本项目不是腾讯官方产品，与 QQ、微信及模型服务商没有隶属关系。
 
-- [qq-bridge](https://github.com/Derpyu520/qq-bridge)：群聊行为与提示词设计参考；小鲸鱼基于其角色卡，由 Tulpa 维护者改编，保留来源和 MIT 许可。
-- [QQ-agent](https://github.com/K0nd1us/QQ-agent)：表情收藏、语义笔记、候选与用量反馈的设计参考；Tulpa 按自身授权和媒体校验机制独立实现。
-- [SnowLuma](https://github.com/SnowLuma/SnowLuma)：提供 QQ / OneBot 接入能力，支持授权后自动部署，遵循其独立许可。
+感谢以下仓库提供的参考或支持！
+
+- [qq-bridge](https://github.com/Derpyu520/qq-bridge)：群聊行为与提示词设计参考；小鲸鱼基于其角色卡。
+- [MaiBot](https://github.com/Mai-with-u/MaiBot)：会话的组织逻辑和学习机制参考。
+- [QQ-agent](https://github.com/K0nd1us/QQ-agent)：表情收藏、语义笔记、候选与用量反馈的设计参考。
+- [SnowLuma](https://github.com/SnowLuma/SnowLuma)：提供 QQ / OneBot 接入能力，本项目已经获得sl的主开发作者的自动部署授权，感谢sl项目主开发[墨梓柒](https://github.com/DrSmoothl)的支持。
+- [墨梓柒](https://github.com/DrSmoothl)：感谢您的开源精神以及对本人的支持！
