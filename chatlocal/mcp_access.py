@@ -168,6 +168,8 @@ class MCPAccess:
 
     @staticmethod
     def validate_permissions(scope):
+        if scope.get('chat_poke') and not (scope.get('chat') and scope.get('send')):
+            raise ValueError('拍一拍需要开启持续聊天及发送权限。')
         if any(scope.get(k) for k in QQ_FLAGS) and 'qq' not in scope['platforms']:
             raise ValueError('SL 扩展权限需要选择 QQ 平台。')
         if any(scope.get(k) for k in ATTACHMENT_FLAGS) and not scope.get('chat'):

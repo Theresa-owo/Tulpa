@@ -121,17 +121,25 @@ for spec in CATALOG.values():
             (READ_APIS if entry['read'] else WRITE_APIS).add(name)
 
 
+def permitted_actions(name, spec, scope):
+    if scope.get(spec['permission']):return spec['actions']
+    if name=='qq_interact' and scope.get('chat_poke') and scope.get('chat') and scope.get('send'):
+        return {'send_poke':spec['actions']['send_poke']}
+    return {}
+
+
 def schemas(tool, scope):
     rows=[]
     for name, spec in CATALOG.items():
-        if not scope.get(spec['permission']):continue
-        props=dict(action=dict(type='string',enum=list(spec['actions'])),params=dict(type='object'),idempotency_key=KEY,
+        actions=permitted_actions(name,spec,scope)
+        if not actions:continue
+        props=dict(action=dict(type='string',enum=list(actions)),params=dict(type='object'),idempotency_key=KEY,
                    offset=integer(0,100000),limit=integer(1,100))
         if spec['scope']!='account':props['conversation_id']=CID
         row=tool(name,spec['description']+' 读取可用 offset/limit 分页，沿用原 params；服务端分页另沿用其游标。写操作需 idempotency_key；UNKNOWN 不自动重试。',props,['action','params']+(['conversation_id'] if spec['scope']!='account' else []))
         row['parameters']['oneOf']=[dict(properties=dict(action=dict(const=action_name),params=entry['params']),
                                         required=[] if entry['read'] else ['idempotency_key'],
-                                        **({} if entry['read'] else {'not':{'anyOf':[{'required':['offset']},{'required':['limit']}]}})) for action_name,entry in spec['actions'].items()]
+                                        **({} if entry['read'] else {'not':{'anyOf':[{'required':['offset']},{'required':['limit']}]}})) for action_name,entry in actions.items()]
         rows.append(row)
     rows.append(tool('get_qq_capabilities','列出本连接的 SL 扩展权限和已开放的动作；不修改权限、不读取凭据。',{},[]))
     return rows

@@ -103,6 +103,20 @@ class ScopeEditTests(unittest.TestCase):
             self.assertEqual(db.execute('SELECT count(*) FROM grants').fetchone()[0], 1)
         self.assertEqual(set(self.bot.calls), {'get_login_info', 'get_group_list'})
 
+    def test_poke_only_toggle_preserves_scope_and_rejects_stale_revision(self):
+        revision=self.editor.revision(self.editor.grant('grant'))
+        before=self.row()
+        self.editor.pokes('grant',dict(enabled=True,revision=revision))
+        after=self.row()
+        self.assertEqual(json.loads(after['scope']),dict(self.scope,chat_poke=True))
+        self.assertFalse(json.loads(after['scope']).get('qq_interactions',False))
+        for key in before:
+            if key not in ('scope','revision'):self.assertEqual(after[key],before[key])
+        with self.assertRaises(GrantConflict):self.editor.pokes('grant',dict(enabled=False,revision=revision))
+        revision=self.editor.revision(self.editor.grant('grant'))
+        self.editor.pokes('grant',dict(enabled=False,revision=revision))
+        self.assertFalse(json.loads(self.row()['scope'])['chat_poke'])
+
     def test_invalid_input_private_crossaccount_unknown_extra_permissions(self):
         revision = self.body()['revision']
         invalid = [[], ['0'], ['-1'], ['1.5'], [True], [1], ['１２３'], ['111:direct:333'],

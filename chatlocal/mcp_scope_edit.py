@@ -12,6 +12,24 @@ class GroupScopeEditor:
         self.access = access
         self.client_factory = client_factory or (lambda: Client(timeout=4))
 
+    def pokes(self, gid, body):
+        if not isinstance(body,dict) or set(body)!={'enabled','revision'} or type(body['enabled']) is not bool:
+            raise ValueError('拍一拍设置字段无效。')
+        with self.access.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row=db.execute('SELECT * FROM grants WHERE id=? AND revoked=0',(gid,)).fetchone()
+            if row is None:raise ValueError('连接无效或已撤销。')
+            grant=self.access.validate_grant(row)
+            if not self.access.settings()['enabled'] or self.revision(grant)!=body['revision']:
+                raise GrantConflict('连接授权已改变，请重新加载。')
+            scope=grant['scope']
+            if 'qq' not in scope['platforms'] or not scope.get('chat') or not scope.get('send'):
+                raise ValueError('拍一拍需要 QQ 持续聊天及发送授权。')
+            scope=dict(scope,chat_poke=body['enabled'])
+            db.execute('UPDATE grants SET scope=?,revision=revision+1 WHERE id=? AND revision=?',
+                (json.dumps(scope),gid,grant['revision']))
+        return dict(enabled=body['enabled'])
+
     @staticmethod
     def revision(grant):
         value = [grant['id'], grant['scope'], grant['epoch'], grant['accounts'], grant['revision']]

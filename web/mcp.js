@@ -107,6 +107,13 @@
       card.append(node('p','来源账号：'+Object.entries(row.accounts).map(([p,id])=>p+' '+(id||'当前导入资料')).join(' / ')+' · '+row.calls+' 次调用', 'mcp-muted'));
       if(row.valid===false&&!row.revoked)card.append(node('p','来源账号已改变，请撤销并重新创建连接。','mcp-warning'));
       if(!row.revoked&&row.valid!==false&&scope.chat_account&&scope.conversations.length){
+        if(scope.chat&&scope.send){
+          const poke=node('button',scope.chat_poke?'关闭拍一拍':'开启拍一拍');poke.type='button';
+          poke.onclick=()=>action(async()=>{poke.disabled=true;try{
+            const current=await api('/connections/'+encodeURIComponent(row.id)+'/groups');
+            await api('/connections/'+encodeURIComponent(row.id)+'/pokes','POST',{enabled:!scope.chat_poke,revision:current.revision});await refresh();
+          }finally{poke.disabled=false;}});card.append(poke);
+        }
         const owner=node('button','主人 QQ 校验');owner.type='button';
         owner.onclick=()=>action(async()=>{owner.disabled=true;try{await ownerEditor(card,row);}finally{owner.disabled=false;}});card.append(owner);
         const add=node('button','添加授权群');add.type='button';

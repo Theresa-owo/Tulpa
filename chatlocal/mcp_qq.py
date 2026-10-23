@@ -10,7 +10,7 @@ import jsonschema
 
 from .mcp_actions import dump, _execution
 from .mcp_access import AccessDenied
-from .mcp_qq_catalog import CATALOG, schemas as action_schemas
+from .mcp_qq_catalog import CATALOG, schemas as action_schemas, permitted_actions
 from .mcp_qq_media import QQMedia, TOOLS as MEDIA_TOOLS, schemas as media_schemas, FLAGS
 from .mcp_qq_permissions import QQ_FLAGS
 from .onebot import OneBotError, OneBotUncertain
@@ -151,7 +151,9 @@ class QQExtensions:
             db.execute('DELETE FROM qq_friend_requests WHERE id NOT IN (SELECT id FROM qq_friend_requests ORDER BY created DESC LIMIT 500)')
 
     def guard(self, grant, spec, args, cancel, *, queued=False):
-        current,account=self.identity(grant,spec['permission']);self.check_cancel(cancel)
+        permission='chat_poke' if spec is CATALOG['qq_interact'] and args['action']=='send_poke' and grant['scope'].get('chat_poke') else spec['permission']
+        current,account=self.identity(grant,permission);self.check_cancel(cancel)
+        if permission=='chat_poke' and not (current['scope'].get('chat') and current['scope'].get('send')):raise AccessDenied('拍一拍需要持续聊天与发送授权。')
         cid=args.get('conversation_id','')
         if cid:self.target(current,cid)
         if args['action'] in OUTBOUND:
@@ -204,7 +206,8 @@ class QQExtensions:
 
     def prepare(self, grant, name, args):
         spec=CATALOG[name];api=args['action'];params=dict(args['params']);client=self.client(grant)
-        _,account=self.identity(grant,spec['permission'])
+        permission='chat_poke' if name=='qq_interact' and api=='send_poke' and grant['scope'].get('chat_poke') else spec['permission']
+        _,account=self.identity(grant,permission)
         cid=args.get('conversation_id');target=self.target(grant,cid,client) if cid else None
         if spec['scope']=='group' and target['kind']!='group':raise ValueError('此操作只适用于授权 QQ 群。')
         if target and spec['scope']=='group':params['group_id']=int(target['peer'])
@@ -356,7 +359,7 @@ class QQExtensions:
     def call(self, grant, name, args, cancel):
         if name=='get_qq_capabilities':
             return dict(permissions={k:dict(enabled=bool(grant['scope'].get(k)),description=v) for k,v in QQ_FLAGS.items()},
-                        actions={name:list(s['actions']) for name,s in CATALOG.items() if grant['scope'].get(s['permission'])},
+                        actions={name:list(permitted_actions(name,s,grant['scope'])) for name,s in CATALOG.items() if permitted_actions(name,s,grant['scope'])},
                         note='接口接入状态，不代表每个 QQ 服务均已实测或当前账号有腾讯侧权限。'),[]
         if name in MEDIA_TOOLS:return self.media.call(grant,name,args,cancel)
         return self.action(grant,name,args,cancel),[]

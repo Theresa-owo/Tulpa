@@ -396,7 +396,7 @@ class ChatTurns:
                 raise TurnRejected('sticker_permission','连接未获发送表情包权限。')
             for expression,flag in (('voice','chat_voice'),('ai_voice','chat_voice'),('video','chat_video'),('file','chat_files')):
                 if expression in expressions and not grant['scope'].get(flag):raise TurnRejected('attachment_permission','连接没有所选附件权限。')
-            if 'qq_action' in expressions and not any(grant['scope'].get(f) for f in ('qq_messages','qq_interactions')):
+            if 'qq_action' in expressions and not any(grant['scope'].get(f) for f in ('qq_messages','qq_interactions','chat_poke')):
                 raise TurnRejected('qq_permission','连接没有消息操作或互动权限。')
             if 'reaction' in expressions and ':direct:' in self.chat.row(sid)['conversation_id']:
                 raise TurnRejected('reaction_unavailable','私聊暂不支持消息表情回应。')
@@ -459,11 +459,11 @@ class ChatTurns:
                 if kind=='reaction' and b['event_id']!=data['target_event_id']:raise TurnRejected('target_mismatch','回应目标与计划不一致。')
                 if kind=='text' and i and (b.get('quote') or b.get('mention_user_ids') or b.get('mention_all')):raise TurnRejected('repeated_addressing','同一轮仅首条按需引用或 @；改变目标需重新规划。')
                 if kind=='qq_action':
-                    from .mcp_qq_catalog import CATALOG
+                    from .mcp_qq_catalog import CATALOG, permitted_actions
                     from .mcp_qq import OUTBOUND
                     import jsonschema
                     spec=CATALOG.get(b['tool'],{});entry=spec.get('actions',{}).get(b['action'])
-                    if not entry or b['action'] not in OUTBOUND or not grant['scope'].get(spec.get('permission')):
+                    if not entry or b['action'] not in OUTBOUND or b['action'] not in permitted_actions(b['tool'],spec,grant['scope']):
                         raise TurnRejected('qq_action_invalid','聊天队列只接受已授权的发送或互动动作。')
                     if not jsonschema.Draft202012Validator(entry['params']).is_valid(b['params']):
                         raise TurnRejected('qq_action_invalid','动作参数格式无效，请按对应工具的参数定义修正。')

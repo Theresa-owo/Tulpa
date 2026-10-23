@@ -289,6 +289,13 @@ def main():
                     # back through the same scoped, durable QQ action queue.
                     tap=dict(post_type='notice',notice_type='notify',sub_type='poke',self_id=111,
                         group_id=222,user_id=333,target_id=111,time=time.time())
+                    # Enable only the dedicated permission on this fixture;
+                    # broader like/sign actions remain denied.
+                    with access.connect() as db:
+                        scope=json.loads(db.execute('SELECT scope FROM grants WHERE id=?',(g['id'],)).fetchone()[0])
+                        db.execute('UPDATE grants SET scope=?,revision=revision+1 WHERE id=?',
+                            (json.dumps(dict(scope,qq_interactions=False,chat_poke=True)),g['id']))
+                    assert call('qq_interact',action='send_like',conversation_id='111:group:223',params={'user_id':'333'},idempotency_key='poke-only-denied-like').isError
                     tools.chat.receive(tap)
                     context=data('get_chat_session',session_id=sid)
                     tapped=next(m for m in context['context']['messages'] if m.get('notice',{}).get('type')=='poke')

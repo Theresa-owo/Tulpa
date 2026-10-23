@@ -98,6 +98,14 @@ def install_mcp_routes(app, store=None):
         except GrantConflict as exc:raise HTTPException(409, str(exc)) from None
         except ValueError as exc:raise HTTPException(400, str(exc)) from None
 
+    @app.post('/api/mcp/connections/{gid}/pokes')
+    def configure_pokes(gid: str, request: Request, body: dict):
+        local(request, True)
+        from .mcp_scope_edit import GroupScopeEditor
+        try:return GroupScopeEditor(access).pokes(gid, body)
+        except GrantConflict as exc:raise HTTPException(409, str(exc)) from None
+        except ValueError as exc:raise HTTPException(400, str(exc)) from None
+
     @app.post('/api/mcp/connections/{gid}/groups')
     def add_authorized_groups(gid: str, request: Request, body: dict):
         local(request, True)
