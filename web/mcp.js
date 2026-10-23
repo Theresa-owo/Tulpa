@@ -107,6 +107,8 @@
       card.append(node('p','来源账号：'+Object.entries(row.accounts).map(([p,id])=>p+' '+(id||'当前导入资料')).join(' / ')+' · '+row.calls+' 次调用', 'mcp-muted'));
       if(row.valid===false&&!row.revoked)card.append(node('p','来源账号已改变，请撤销并重新创建连接。','mcp-warning'));
       if(!row.revoked&&row.valid!==false&&scope.chat_account&&scope.conversations.length){
+        const owner=node('button','主人 QQ 校验');owner.type='button';
+        owner.onclick=()=>action(async()=>{owner.disabled=true;try{await ownerEditor(card,row);}finally{owner.disabled=false;}});card.append(owner);
         const add=node('button','添加授权群');add.type='button';
         add.onclick=()=>action(async()=>{add.disabled=true;try{await groupEditor(card,row);}finally{add.disabled=false;}});card.append(add);
       }
@@ -115,6 +117,23 @@
     }
     if(!current.connections.length)$('mcp-connections').append(node('p','还没有授权连接。','mcp-muted'));
     $('mcp-audit').replaceChildren(...current.recent.map(row=>node('p',new Date(row.at*1000).toLocaleString()+' · '+row.name+' · '+row.tool+' · '+row.status+' · '+row.seconds+' 秒 · '+row.messages+' 条消息','mcp-muted')));
+  }
+  async function ownerEditor(card,row){
+    card.querySelector('[data-owner-editor]')?.remove();
+    const url='/connections/'+encodeURIComponent(row.id)+'/owner',data=await api(url);
+    const form=node('form',''),enabled=document.createElement('input'),qq=document.createElement('input');form.dataset.ownerEditor='1';
+    enabled.type='checkbox';enabled.checked=data.enabled;qq.type='text';qq.inputMode='numeric';qq.value=data.owner_qq;qq.maxLength=16;
+    const enabledLabel=node('label','启用主人指令校验'),qqLabel=node('label','主人 QQ');enabledLabel.prepend(enabled);qqLabel.append(qq);
+    const save=node('button','保存主人设置');save.type='submit';let saving=false;
+    form.append(node('h4','主人 QQ 校验'),enabledLabel,qqLabel,
+      node('p','仅保护此连接的 Tulpa 本地文件操作、管理工具和 @全体。日常聊天、看图及 Codex 自身工具不受此设置影响。','mcp-muted'),
+      node('p','启用后，主人需在当前会话直接发送 /tulpa JSON 指令，指定 tool 与完整 arguments；指令十分钟内有效。昵称、引用、转发和普通聊天不能授权。','mcp-muted'),
+      node('pre','/tulpa {"tool":"send_chat_file","arguments":{"session_id":"当前会话ID","filename":"report.pdf","idempotency_key":"唯一操作编号"}}'),save);
+    form.onsubmit=e=>{e.preventDefault();if(saving)return;saving=true;save.disabled=true;action(async()=>{try{
+      await api(url,'PUT',{enabled:enabled.checked,owner_qq:qq.value.trim(),expected_revision:data.revision});
+      await refresh();$('mcp-error').textContent='主人设置已保存，仅对 Tulpa 的受控工具生效。';
+    }finally{saving=false;save.disabled=false;}});};
+    card.append(form);qq.focus();
   }
   async function groupEditor(card,row){
     card.querySelector('[data-group-editor]')?.remove();

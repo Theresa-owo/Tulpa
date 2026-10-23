@@ -20,6 +20,7 @@
 | 多群实时等待 | `wait_chat_messages_many` 最多关注 8 个会话，任一有待处理输入就返回；公平轮换，避免被空闲群或其它群的图片丰富步骤拖延 |
 | 人格 | 保留上游全部人格与热发现，增加通用 `白龙娘` 预设。个人账号与本机路径未进入公共角色卡；身份与操作权限仍由当前宿主和连接决定 |
 | 输出约束 | 内置系统提示、MCP 指令和群聊行为均要求不显示推理摘要、内部分析或思考过程，仍保留必要证据与正常协议字段 |
+| 主人 QQ 硬校验 | 可在每个连接的“主人 QQ 校验”中启用；Tulpa 服务端将本地文件、管理和广播操作绑定主人原始指令，不修改 Codex 自身权限 |
 
 上游已包含的 `get_msg`、常规图片、实时附件、通用群管理和权限开关编辑继续使用上游代码。旧版仅切换文件权限的专用路由由新版带 revision 的权限编辑替代；没有复制旧版直接 SQL 修改路径。
 
@@ -48,6 +49,22 @@
 
 `quiet_seconds=0` 只控制消息交付时机；发送前的上游节奏、WAITING 与计划校验保持有效。停止、撤销、权限版本变化、同群重复等待、跨群游标或越界确认继续拒绝。
 
+## 主人 QQ 校验
+
+在 Tulpa 的已授权连接卡片点击“主人 QQ 校验”，填写主人 QQ 并勾选启用。该设置只存在本机授权库，默认关闭，不把个人号码写进源码或角色卡。配置入口是本机界面 API，不是模型可调用工具；设置变动递增连接版本，并使进行中的旧授权失效。原 Token、会话范围和现有会话保留。
+
+启用后，工作区文件读取/发送、原文件与图片导出、媒体导入、文件/账号/群管理、以及真实 @全体等受控 Tulpa 操作，要求主人在已授权的当前会话直接发送纯文本指令：
+
+```text
+/tulpa {"tool":"send_chat_file","arguments":{"session_id":"实际会话ID","filename":"report.pdf","idempotency_key":"本次操作的稳定编号"}}
+```
+
+先读取该消息，再调用相应工具，保留同样的参数并附上 `owner_session_id` 和 `owner_event_id`。参数填写的是原消息所属会话和事件 ID，不是 QQ 原生消息编号。服务端从已核验的 OneBot 入库事件重新取得 `sender_id`、原始文本、会话、时间、撤回和交付状态；模型不能提交一个 owner_qq 字段来冒充主人。
+
+授权消息须发在启用/修改设置之后，十分钟内有效，且工具名与完整参数必须匹配。昵称、自称、普通聊天、引用、转发、媒体、其他账号、其他连接、未读取或已撤回消息均不能授权。改文件名、目标、动作或幂等编号需要新的主人指令；相同幂等编号的重试仍受原有操作回执约束。队列内 file/qq_action 与 @全体也经过同一检查，不能换一个入口绕过。
+
+正常群聊、消息等待、读取群内图片和停止会话继续按原有权限工作。本机管理界面的操作仍由本机用户控制。这个功能只拦截 Tulpa 自己的工具，不安装 Codex Hook、不修改 Codex 配置，也不限制 Codex 原生 shell、编辑或其他连接器。
+
 ## 验证入口
 
 从已安装仓库开发依赖的 Python 环境执行：
@@ -58,6 +75,7 @@ python scripts/check_fork_mcp_realtime.py
 python scripts/check_fork_native_files.py
 python scripts/check_fork_scope_edit.py
 python scripts/check_fork_permissions.py
+python scripts/check_fork_owner_gate.py
 python scripts/check_fork_upstream_sync.py
 python scripts/check_publication.py
 ```

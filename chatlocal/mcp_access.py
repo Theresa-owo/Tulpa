@@ -52,6 +52,10 @@ class MCPAccess:
                     at REAL NOT NULL, status TEXT NOT NULL, seconds REAL NOT NULL DEFAULT 0,
                     messages INTEGER NOT NULL DEFAULT 0);
                 CREATE INDEX IF NOT EXISTS calls_budget ON calls(grant_id,tool,at);
+                CREATE TABLE IF NOT EXISTS owner_policies(
+                    grant_id TEXT PRIMARY KEY, enabled INTEGER NOT NULL DEFAULT 0,
+                    owner_qq TEXT NOT NULL DEFAULT '', revision INTEGER NOT NULL DEFAULT 0,
+                    updated REAL NOT NULL DEFAULT 0, after_event_id INTEGER NOT NULL DEFAULT 0);
                 CREATE INDEX IF NOT EXISTS calls_recent ON calls(grant_id,at,tool);
             ''')
             if 'revision' not in {r[1] for r in db.execute('PRAGMA table_info(grants)')}:
@@ -252,6 +256,8 @@ class MCPAccess:
 
     def validate_grant(self, row, *, source=True):
         grant = dict(row)
+        from .mcp_owner import check_bound
+        check_bound(self,grant['id'])
         grant['scope'] = json.loads(grant['scope'])
         if not source:return grant  # Authentication only. Tool-specific checks still apply.
         try:

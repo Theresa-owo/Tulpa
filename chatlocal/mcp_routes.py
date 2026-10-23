@@ -141,6 +141,22 @@ def install_mcp_routes(app, store=None):
         service.cancel(gid)
         return dict(revoked=True)
 
+    @app.get('/api/mcp/connections/{gid}/owner')
+    def owner_policy(gid:str,request:Request):
+        local(request)
+        from .mcp_owner import OwnerGate
+        try:return OwnerGate(access).view(gid)
+        except ValueError as exc:raise HTTPException(400,str(exc)) from None
+
+    @app.put('/api/mcp/connections/{gid}/owner')
+    def owner_update(gid:str,request:Request,body:dict):
+        local(request,True)
+        from .mcp_owner import OwnerGate
+        from .mcp_access import GrantConflict
+        try:return OwnerGate(access).configure(gid,body)
+        except GrantConflict as exc:raise HTTPException(409,str(exc)) from None
+        except ValueError as exc:raise HTTPException(400,str(exc)) from None
+
     @app.get('/api/mcp/operations')
     def operations(request: Request):
         local(request)

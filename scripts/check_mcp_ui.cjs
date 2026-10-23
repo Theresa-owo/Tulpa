@@ -13,6 +13,7 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
     page.on('pageerror',e=>errors.push(e.message));
     let state,requests,mode,failList=false,delayCreate=false,sessions=[],overviewError=false,libraryError=false,libraryDelay=false,stopError=false,learningState='积累中',learning={enabled:true};
     let connections=[],groupRevision='scope-v0',groupFailure=false,delayGroupAdd=false;
+    let ownerState={enabled:false,owner_qq:'',revision:0};
     const groupChoices=()=>[{group_id:'222',name:'既有群',authorized:true},{group_id:'444',name:'待新增群甲',authorized:false},{group_id:'555',name:'待新增群乙 <img src=x onerror=alert(1)>',authorized:false}];
     const group=()=>({conversation_id:'111:group:444',account:'111',group:'444',name:'合成测试群',active:sessions.filter(s=>s.active),history:sessions.filter(s=>!s.active),learning,learning_state:learningState,can_start:!sessions.some(s=>s.active),connection_id:'fixture-connection'});
     const shot=async name=>{if(process.env.AUTO_LEARNING_SCREENSHOT_DIR){fs.mkdirSync(process.env.AUTO_LEARNING_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.AUTO_LEARNING_SCREENSHOT_DIR,name+'.png')});}};
@@ -29,6 +30,7 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
       if(url.pathname==='/api/mcp/live-groups')return reply({items:[{platform:'qq',conversation_id:'111:group:444',name:'未导入的实时群',count:'OneBot'}]});
       if(url.pathname==='/api/mcp/live-friends')return reply({items:[{platform:'qq',conversation_id:'111:direct:555',name:'未导入的好友',count:'OneBot'}]});
       if(url.pathname==='/api/mcp/connections/scope-fixture/groups'&&method==='GET')return reply({items:groupChoices(),scope:connections[0].scope,revision:groupRevision});
+      if(url.pathname==='/api/mcp/connections/scope-fixture/owner'&&method==='GET')return reply(ownerState);
       if(url.pathname==='/api/desktop/preferences')return reply({background:false});
       if(url.pathname==='/api/desktop/status')return reply({owned:true});
       if(url.pathname==='/api/mcp/chats'&&method==='GET')return reply({sessions,receiver:{state:'connected',note:'SnowLuma 实时事件已连接。'}});
@@ -40,6 +42,11 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
       if(url.pathname==='/api/mcp/chat-personas')return reply({personas:[{id:'little_whale',name:'小鲸鱼'},{id:'little_whale_v2',name:'小鲸鱼2号'}]});
       if(url.pathname.endsWith('/learning')&&method==='GET')return reply(learning);
       const body=r.postDataJSON();requests.push({path:url.pathname,method,body});
+      if(url.pathname==='/api/mcp/connections/scope-fixture/owner'&&method==='PUT'){
+        if(body.expected_revision!==ownerState.revision)return reply({detail:'设置已改变'},409);
+        if(body.enabled&&!/^[1-9][0-9]{4,15}$/.test(body.owner_qq))return reply({detail:'主人 QQ 应为 5 至 16 位数字'},400);
+        ownerState={enabled:body.enabled,owner_qq:body.owner_qq,revision:ownerState.revision+1};return reply(ownerState);
+      }
       if(url.pathname==='/api/mcp/connections/scope-fixture/groups'&&method==='POST'){
         if(delayGroupAdd)await new Promise(resolve=>setTimeout(resolve,150));
         if(groupFailure||body.revision!==groupRevision)return reply({detail:'连接授权已改变，请重新加载后确认。'},409);
@@ -249,6 +256,21 @@ const html=`<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>MCP U
     await page.locator('[data-group-editor]').getByRole('checkbox',{name:'待新增群甲（444）',exact:true}).check();
     assert.equal(await page.locator('[data-group-editor]').getByRole('button').textContent(),'确认添加 1 个群至「目录勾选连接」');
     assert.equal(requests.length,0);
+    await page.getByRole('button',{name:'主人 QQ 校验',exact:true}).click();
+    const ownerForm=page.locator('[data-owner-editor]');
+    await ownerForm.getByLabel('主人 QQ',{exact:true}).fill('nickname');
+    await ownerForm.getByRole('checkbox').check();
+    await ownerForm.getByRole('button',{name:'保存主人设置'}).click();
+    await waitText('mcp-error','主人 QQ 应为');
+    assert.equal(await ownerForm.getByRole('button').isEnabled(),true);
+    assert.ok((await ownerForm.textContent()).includes('Codex 自身工具不受此设置影响'));
+    await ownerForm.getByLabel('主人 QQ',{exact:true}).fill('22222');requests=[];
+    await ownerForm.getByRole('button',{name:'保存主人设置'}).click();
+    await waitText('mcp-error','主人设置已保存');
+    assert.deepEqual(requests,[{path:'/api/mcp/connections/scope-fixture/owner',method:'PUT',body:{enabled:true,owner_qq:'22222',expected_revision:0}}]);
+    await page.getByRole('button',{name:'主人 QQ 校验',exact:true}).click();
+    assert.equal(await page.locator('[data-owner-editor]').getByLabel('主人 QQ',{exact:true}).inputValue(),'22222');
+    assert.equal(await page.locator('[data-owner-editor]').getByRole('checkbox').isChecked(),true);
     await setup(true);
 
     // Display literal persona, preserve expanded details across polling, stop one/all.

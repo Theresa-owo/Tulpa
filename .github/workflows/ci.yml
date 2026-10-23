@@ -74,6 +74,7 @@ jobs:
           $checks += @('check_snowluma_managed.py','check_snowluma_managed_transport.py','check_snowluma_download.py')
           $checks += @('check_mcp_picker.py','check_image_identity.py','check_mcp_chat_enrichment.py','check_mcp_chat_output.py','check_mcp_image_reuse.py','check_reply_timing.py','check_antigravity_reply_timing.py')
           $checks += @('check_fork_mcp_parallel.py','check_fork_mcp_realtime.py','check_fork_native_files.py','check_fork_scope_edit.py','check_fork_upstream_sync.py','check_fork_permissions.py')
+          $checks += @('check_fork_owner_gate.py')
           foreach ($check in $checks) {
             python "scripts/$check"
             if ($LASTEXITCODE -ne 0) { throw "$check failed" }
