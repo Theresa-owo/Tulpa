@@ -32,7 +32,7 @@ def action(properties=None, required=(), read=False):
 
 
 CATALOG = {
-    'qq_interact': dict(permission='qq_interactions', scope='conversation', description='戳一戳、资料点赞及群签到。user_id 必须是已核对的当前群成员或当前私聊好友。', actions={
+    'qq_interact': dict(permission='qq_interactions', scope='conversation', description='主动拍一拍（戳一戳）、被拍后回拍、资料点赞及群签到。send_poke 可由模型按语境主动选择，不要求对方先拍；仍通过 Planner 和发送队列。user_id 必须是已核对的当前群成员或当前私聊好友。', actions={
         'send_poke': action(dict(user_id=UID)),
         'send_like': action(dict(user_id=UID, times=integer(1,10)), ['times']),
         'set_group_sign': action(),

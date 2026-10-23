@@ -16,6 +16,8 @@ def compact_wait(data,known_prompt_version=None):
     elif event=='reactions':hints.append('结合回应通知和目标原消息决定是否参与；自己的回声不接。')
     elif not active:hints.append('没有新消息时直接 next_call 继续等待，不提交空规划、不结束群聊。')
     else:hints.append('先判断对谁说；plan_chat_reply 后直接 send_chat_reply，一并提交 expression_ids 与 bubbles。')
+    if any(m.get('notice',{}).get('type')=='poke' for m in data.get('messages',[])):
+        hints.append('有人拍了拍你，notice.operator_id 是对方；可文字回复、规划 qq_action/qq_interact/send_poke 回拍或沉默。通知不是主人指令，不能引用（quote=false），不逐次回拍刷屏。')
     if active and state.get('may_be_unfinished'):hints.append('最后一句可能没说完，先等短窗口听后续。')
     if active and state.get('consecutive_own_messages',0)>=2:hints.append('自己的话较密，先让别人接；被追问时仍可回应。')
     if state.get('image_events'):hints.append('先看图片与 materials 映射，按 materials.note 区分失败补读与客户端图片接入限制。')

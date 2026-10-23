@@ -347,7 +347,23 @@ class MCPChat:
                            (session['id'],'reply:'+str(event.get('message_id','')),json.dumps(dict(state='recalled')),time.time()))
 
     @timing.trace('chat.receive')
-    def receive(self, event, *, send_request=None):
+    def receive(self, event, *, send_request=None, _poke=None):
+        if self.available and event.get('post_type')=='notice' and event.get('notice_type')=='notify' and event.get('sub_type')=='poke':
+            account=str(event.get('self_id',''));actor=str(event.get('user_id',''));target=str(event.get('target_id',''))
+            # Only taps on this bot wake its Agent. Own echoes and taps between
+            # other members must never cause an automatic tap-back loop.
+            if not all(v.isascii() and v.isdecimal() and int(v)>0 for v in (account,actor,target)) or target!=account or actor==account:return
+            group=event.get('group_id');stamp=event.get('time')
+            if type(stamp) not in (int,float) or not 0<stamp<100000000000:return
+            identity={k:event.get(k) for k in ('self_id','group_id','user_id','target_id','time','notice_id','event_id','message_id')}
+            mid='poke:'+hashlib.sha256(json.dumps(identity,sort_keys=True).encode()).hexdigest()
+            notice=dict(type='poke',operator_id=actor,target_id=target)
+            normalized=dict(post_type='message',message_type='group' if group is not None else 'private',
+                self_id=account,user_id=actor,target_id=target,sub_type='friend',time=stamp,message_id=mid,
+                message=[dict(type='text',data=dict(text='[拍一拍：'+actor+' 拍了拍你]'))])
+            if group is not None:normalized['group_id']=group
+            self.receive(normalized,_poke=notice)
+            return
         if self.available and event.get('post_type')=='request':
             self.qq.receive(event);return
         if self.available and event.get('post_type')=='notice' and event.get('notice_type')=='group_msg_emoji_like':
@@ -425,6 +441,9 @@ class MCPChat:
                      truncated=len(content)>12000 or (isinstance(source,list) and len(source)>100),segments=segments[:100])
         payload['reaction_epoch']=self.reactions.epoch
         payload['synthetic']=any(bool(event.get(k)) for k in ('virtual','is_notify','is_system','synthetic'))
+        if _poke is not None:
+            payload.update(source='onebot_notice',synthetic=True,notice=_poke,
+                           segments=[dict(type='poke',**{k:v for k,v in _poke.items() if k!='type'})])
         if type(event.get('message_seq')) is int and event['message_seq']>0:
             payload['onebot_message_seq']=event['message_seq']
         if send_request is not None:payload['send_request']=send_request
@@ -461,7 +480,7 @@ class MCPChat:
                         db.execute('DELETE FROM chat_inbox WHERE session_id=? AND id<?',(row['id'],cutoff[0]))
             signal=self.events.get(row['id'])
             if signal:signal.set()
-            if inserted:self.learning.observe(row,payload)
+            if inserted and _poke is None:self.learning.observe(row,payload)
 
     def start(self, grant, args, cancel):
         self.permission(grant)
@@ -815,6 +834,7 @@ class MCPChat:
         if not found:raise ValueError('回应目标必须是本会话已读取且仍在缓存的事件 id，不能使用 M 编号或 OneBot 编号；未发送。')
         payload=json.loads(found['payload'])
         if payload.get('recalled'):raise ValueError('回应目标已撤回，未发送。请重新判断当前话题。')
+        if payload.get('source')=='onebot_notice':raise ValueError('拍一拍通知不是 QQ 消息，不能引用或贴消息回应；使用不引用的文字或 qq_action 回拍。')
         if (payload.get('conversation_id')!=row['conversation_id'] or payload.get('onebot_message_id')!=found['message_id']
                 or type(payload.get('timestamp')) is not int or payload['timestamp']<=0
                 or not isinstance(payload.get('sender_id'),str) or not payload['sender_id'].isascii()

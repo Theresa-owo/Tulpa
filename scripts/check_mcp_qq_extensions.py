@@ -285,6 +285,26 @@ def main():
                     assert call('qq_interact',action='send_poke',conversation_id='111:group:222',params={'user_id':'333'},idempotency_key='bypass-plan').isError
                     r,_=send(sid,dict(kind='qq_action',tool='qq_interact',action='send_poke',params={'user_id':'333'}))
                     assert r['state']=='SUCCEEDED' and Bot.writes[-1][1]['group_id']==222
+                    # A tap notice alone can enter Planner and produce one tap
+                    # back through the same scoped, durable QQ action queue.
+                    tap=dict(post_type='notice',notice_type='notify',sub_type='poke',self_id=111,
+                        group_id=222,user_id=333,target_id=111,time=time.time())
+                    tools.chat.receive(tap)
+                    context=data('get_chat_session',session_id=sid)
+                    tapped=next(m for m in context['context']['messages'] if m.get('notice',{}).get('type')=='poke')
+                    time.sleep(.12)
+                    context=data('get_chat_session',session_id=sid)
+                    p=data('plan_chat_reply',session_id=sid,batch_id=context['input_batch']['id'],action='reply',
+                        expressions=['qq_action'],target_event_id=tapped['id'],intent='自然回拍一次')
+                    assert p['state']=='READY',p
+                    reply=dict(session_id=sid,plan_id=p['plan_id'],expression_ids=[],
+                        bubbles=[dict(kind='qq_action',tool='qq_interact',action='send_poke',params={'user_id':'333'})])
+                    r=data('send_chat_reply',**reply)
+                    assert r['state']=='SUCCEEDED' and Bot.writes[-1]==('send_poke',dict(group_id=222,user_id=333)),r
+                    count=len(Bot.writes)
+                    assert data('send_chat_reply',**reply)['state']=='SUCCEEDED' and len(Bot.writes)==count
+                    tools.chat.receive(dict(tap,user_id=111,target_id=333))
+                    assert len(Bot.writes)==count,'Own tap echo caused an automatic reply'
                     Bot.history[9010]=dict(Bot.history[9001],group_id=223,message_id=9010)
                     Bot.history[9011]=dict(Bot.history[9001],group_id=999,message_id=9011)
                     # Destination 223 is idle; source 222 is authorized and current.

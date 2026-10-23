@@ -122,6 +122,41 @@ def main():
                     assert not chat.turns.waiting(sessions[0]) and resumed['results'][0]['decision_required']
                     drain()
 
+                    # A real notice wakes the same multi-group wait, is deduped,
+                    # and remains a notice (never an owner command or QQ quote).
+                    poke=dict(post_type='notice',notice_type='notify',sub_type='poke',self_id=111,
+                        group_id=222,user_id=333,target_id=111,time=time.time())
+                    with ThreadPoolExecutor(1) as pool:
+                        future=pool.submit(many,timeout_seconds=5)
+                        eventually(lambda:len(chat.waiters)==8)
+                        events.send(poke)
+                        packet=future.result(2)['results'][0]
+                    assert packet['session_id']==sessions[0] and packet['decision_required']
+                    notice=packet['messages'][-1]
+                    assert notice['source']=='onebot_notice' and notice['synthetic']
+                    assert notice['notice']==dict(type='poke',operator_id='333',target_id='111')
+                    chat.receive(poke)
+                    assert len(single(timeout_seconds=0)['messages'])==1,'Duplicate poke was delivered twice'
+                    for change in (dict(user_id=111),dict(target_id=444),dict(group_id=999),dict(self_id=999),dict(user_id='bad')):
+                        chat.receive(dict(poke,**change))
+                    assert len(single(timeout_seconds=0)['messages'])==1
+                    from chatlocal.mcp_chat_output import compact_wait
+                    compact=compact_wait(packet,packet['chat_guidance']['prompt_version'])
+                    assert any('拍' in hint for hint in compact['chat_guidance']['reminders'])
+                    try:chat.response_target(chat.row(sessions[0]),notice['id'])
+                    except ValueError:pass
+                    else:raise AssertionError('Notice accepted as a quotable QQ message')
+                    time.sleep(2.1)  # Respect the existing Planner burst window.
+                    packet=single(timeout_seconds=0)
+                    planned=chat.turns.plan(grant,dict(session_id=sessions[0],batch_id=packet['input_batch']['id'],
+                        action='reply',intent='natural reply to tap',target_event_id=notice['id'],expressions=['text']),cancel)
+                    assert planned['state']=='READY',planned
+                    outcome=chat.turns.submit(grant,dict(session_id=sessions[0],plan_id=planned['plan_id'],
+                        expression_ids=[],bubbles=[dict(kind='text',text='？',quote=False)]),cancel)
+                    assert outcome['state']=='SUCCEEDED',outcome
+                    assert OneBot.sent[-1]['message']==[dict(type='text',data=dict(text='？'))]
+                    drain()
+
                     # Same session cannot be owned by a second wait; cancellation
                     # and stop wake the shared signal without leaving owners.
                     with ThreadPoolExecutor(1) as pool:
@@ -179,8 +214,8 @@ def main():
                         except AccessDenied:pass
                         else:raise AssertionError('Revoked grant continued waiting')
                     assert not chat.waiters and not chat.events
-                    assert not OneBot.sent,'Realtime checks sent a message'
-        print('PASS: immediate default delivery, zero-timeout scan, eight-group readiness/fairness, selective enrichment, per-group ACKs, deferred Planner, duplicate ownership, cancel/stop/revoke, scan/sleep race and learning priority/handoff; temporary data only, no QQ/model writes.')
+        assert len(OneBot.sent)==1,'Expected only the isolated poke text reply'
+        print('PASS: realtime waits, poke wake/dedup/scope/echo suppression, Planner text reply, per-group ACKs, cancellation and learning; loopback fixtures only, no real QQ/model writes.')
     finally:
         events.close();upstream.shutdown();upstream.server_close()
 

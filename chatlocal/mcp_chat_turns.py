@@ -332,7 +332,8 @@ class ChatTurns:
         rows=self.data(sid);indexed={m['id']:m for m in rows}
         for eid in data['focus_ids']:
             m=indexed.get(eid)
-            if not m or m.get('recalled') or m.get('synthetic') or not m['delivered']:
+            poke=bool(m and m.get('source')=='onebot_notice' and m.get('notice',{}).get('type')=='poke')
+            if not m or m.get('recalled') or (m.get('synthetic') and not poke) or not m['delivered']:
                 raise TurnRejected('target_expired','目标已失效，请重新读取。')
         focus=data['focus'];account=row['conversation_id'].split(':')[0]
         # Replies to a first bubble are relevant even from a different speaker.
@@ -452,6 +453,9 @@ class ChatTurns:
                 required={'text':{'text'},'sticker':{'sticker_id'},'reaction':{'event_id','reaction_id','operation'},
                     'voice':{'asset_id'},'video':{'asset_id'},'file':{'asset_id'},'ai_voice':{'text','character_id'},'qq_action':{'tool','action','params'}}[kind]
                 if required-set(b):raise TurnRejected('expression_mismatch','表达缺少必要内容。')
+                target=next((m for m in self.data(sid) if m['id']==data['target_event_id']),{})
+                if target.get('source')=='onebot_notice' and (kind=='reaction' or (kind=='text' and b.get('quote'))):
+                    raise TurnRejected('notice_not_quotable','拍一拍通知不能引用或贴消息回应。')
                 if kind=='reaction' and b['event_id']!=data['target_event_id']:raise TurnRejected('target_mismatch','回应目标与计划不一致。')
                 if kind=='text' and i and (b.get('quote') or b.get('mention_user_ids') or b.get('mention_all')):raise TurnRejected('repeated_addressing','同一轮仅首条按需引用或 @；改变目标需重新规划。')
                 if kind=='qq_action':
@@ -522,7 +526,10 @@ class ChatTurns:
                         try:
                             if b['kind']=='text':
                                 params=dict(session_id=sid,idempotency_key=key,**{k:v for k,v in b.items() if k!='kind'})
-                                if data['target_event_id']:params['reply_to_event_id']=data['target_event_id']
+                                target=next((m for m in self.data(sid) if m['id']==data['target_event_id']),{})
+                                if target.get('source')=='onebot_notice':
+                                    if b.get('quote'):raise TurnRejected('notice_not_quotable','拍一拍通知不能显示为消息引用。')
+                                elif data['target_event_id']:params['reply_to_event_id']=data['target_event_id']
                                 result=self.chat.send(grant,params,cancel)
                             elif b['kind']=='sticker':
                                 result,_=self.chat.media.call(grant,'send_chat_sticker',dict(session_id=sid,idempotency_key=key,sticker_id=b['sticker_id']),cancel)
