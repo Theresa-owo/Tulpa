@@ -529,6 +529,24 @@ class DetailBot(ReactionBot):
         self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
 
 
+class HealthyEvents(Events):
+    """Long material fixtures need the same heartbeat as a healthy OneBot node."""
+    def __init__(self):
+        super().__init__()
+        self.heartbeat_stop=threading.Event()
+        self.heartbeat_thread=threading.Thread(target=self.heartbeat,daemon=True)
+        self.heartbeat_thread.start()
+
+    def heartbeat(self):
+        while not self.heartbeat_stop.wait(1):
+            self.send(dict(post_type='meta_event',meta_event_type='heartbeat',self_id=111,
+                           status=dict(online=True,good=True)))
+
+    def close(self):
+        self.heartbeat_stop.set();self.heartbeat_thread.join(3)
+        super().close()
+
+
 def main():
     from chatlocal.mcp_chat_details import sanitize_nodes,MAX_TEXT
     from chatlocal.mcp_chat_materials import incomplete
@@ -542,7 +560,7 @@ def main():
     assert not incomplete(dict(nodes=nested)),'exact nested node budget was incorrectly marked incomplete'
     # Windows OpenSSL needs its first initialization before the fixture clears env.
     ssl.create_default_context()
-    events=Events();DetailBot.sent=[];DetailBot.writes=[];DetailBot.history={};DetailBot.intercept=None
+    events=HealthyEvents();DetailBot.sent=[];DetailBot.writes=[];DetailBot.history={};DetailBot.intercept=None
     upstream=ThreadingHTTPServer(('127.0.0.1',0),DetailBot)
     threading.Thread(target=upstream.serve_forever,daemon=True).start()
     out=io.BytesIO();Image.new('RGB',(64,48),'blue').save(out,'PNG');raw=out.getvalue()
