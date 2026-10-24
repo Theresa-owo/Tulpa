@@ -29,6 +29,11 @@ def build(output):
     payload = {}
     with tarfile.open(fileobj=io.BytesIO(snapshot)) as archive:
         for member in archive:
+            # Git emits directory entries too. The Bilibili vendor allowlist
+            # permits extensionless license files, so test the archive type
+            # before applying the file policy; directories have no payload.
+            if member.isdir():
+                continue
             if not included(member.name) or member.name == 'README.md':
                 continue
             if not member.isfile():
