@@ -56,5 +56,5 @@ def build(output):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output', type=Path, default=ROOT/'release'/f'Tulpa-{VERSION}-linux.tar.gz')
+    parser.add_argument('--output', type=Path, default=ROOT/'release'/f'Tulpa-MCP-{VERSION}-linux.tar.gz')
     print(json.dumps(build(parser.parse_args().output), ensure_ascii=False, indent=2))

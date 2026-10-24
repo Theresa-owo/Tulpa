@@ -16,7 +16,7 @@ DOCUMENTS = frozenset({
     'LINUX_AGENT_SETUP.md', 'LINUX_CONTRIBUTING.md', 'LINUX_CONTRIBUTORS.md', 'DOCKER_ACCEPTANCE.md',
     'DOCKER_MANAGED_PLAN.md', 'LINUX_ACCEPTANCE.md', 'LINUX_TERMINAL.md',
     'SECURITY.md', 'TERMINAL_API.md', 'LINUX_THIRD_PARTY.md', 'LINUX_UPGRADE.md', 'SL_TOOLS.md',
-    'assets/title.png',
+    'assets/title.png', 'assets/SnowLuma.png',
     'BILIBILI_MCP.md',
 })
 REQUIREMENTS = frozenset({

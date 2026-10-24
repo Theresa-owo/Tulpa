@@ -1,11 +1,11 @@
 ![Tulpa](doc/assets/title.png)
 
-# Tulpa · Linux 终端版
+# Tulpa MCP · Linux 终端版
 
-把 QQ / 微信资料接入外部 Agent，也让它带着自定义人格参与 QQ 群聊。
-这是 [Tulpa](https://github.com/fumingyang2004/Tulpa) 0.5.6 的 Linux 终端源码发行版，
-包含 CLI、终端界面、MCP 服务、资料检索、模型对话和 SnowLuma（SL）托管。
-只使用外部 Agent 时，无需在 Tulpa 里填写模型 API Key。
+把 QQ / 微信资料与 B站视频接入外部 Agent，也让它带着自定义人格参与 QQ 群聊。
+这是 [Tulpa](https://github.com/fumingyang2004/Tulpa) 0.5.7 的 Linux MCP 终端源码发行版，
+包含 CLI、终端界面、MCP 服务、资料检索和 SnowLuma（SL）托管。
+当前只维护 MCP 版，复用外部 Agent，无需在 Tulpa 里填写模型 API Key。
 
 ## 安装与启动
 
@@ -74,7 +74,7 @@ Tulpa 准备会话后会显示「等待 Agent」；外部 Agent 退出或停止�
 
 ## 资料与可选组件
 
-终端界面可管理本机数据、聊天记录、搜索、记忆、关注卡、材料、工作区和模型对话。
+终端界面可管理本机数据、聊天记录、搜索与 MCP 连接。
 QQ / 微信历史读取需要实际可读的数据源及有效密钥；OneBot 实时接入不会自动补齐全部历史。
 本机客户端路径、导入和取钥限制见 [Linux 原生数据说明](doc/LINUX_TERMINAL.md#原生-qq--微信数据)。
 
@@ -84,12 +84,20 @@ QQ / 微信历史读取需要实际可读的数据源及有效密钥；OneBot �
 sh setup-linux.sh --full
 ```
 
-完整安装会下载依赖、语音程序和模型。内置模型对话另需配置自己的模型服务。
+这里的 `--full` 指安装可选读取与媒体组件，不是另一个完整版发行包；安装会下载依赖、语音程序和模型。
 用户级常驻服务可用 `./tulpa service install --start`，桌面终端快捷入口可用 `./tulpa desktop-install`。
+
+## B站浏览
+
+本版包含与桌面 MCP 共用的 B站只读工具：搜索、推荐、详情与分 P、字幕/本地 ASR、真实抽帧和评论。
+B站权限仍属于原 MCP 连接，不另建服务，也不要求导入聊天资料。
+登录和媒体处理能力、工具协议及限制见 [B站说明](doc/BILIBILI_MCP.md)。
+Linux 已覆盖离线接口回归；真实账号扫码和媒体读取的实测记录来自 Windows，不能视作 Linux 实机通过。
+QQ 原生视频卡片跳转未通过验收，本版不开放为可用分享功能。
 
 ## 测试范围与数据
 
-0.5.6 的验证分为本机 WSL2 / Ubuntu x86_64 安装启动、隔离接口回归，以及 GitHub Actions 的 x86_64 / ARM64 测试。
+本版的验证分为本机 WSL2 / Ubuntu x86_64 安装启动、隔离接口回归，以及 GitHub Actions 的 x86_64 / ARM64 测试。
 这些检查不代表在所有 Linux 发行版、QQ / 微信版本上验证了真实账号读取；本次不进行真实 QQ 发言或扫码。
 原生客户端版本、权限和密钥会影响读取能力，ARM64 不提供未经验证的主动启动取钥。
 早期移植的真实环境结果见 [Linux 验收记录](doc/LINUX_ACCEPTANCE.md) 与 [Docker 验收记录](doc/DOCKER_ACCEPTANCE.md)。
@@ -114,4 +122,5 @@ Tulpa 自有代码采用 [MIT License](LICENSE)。本 Linux 移植保留上游�
 小鲸鱼人格改编自 [qq-bridge](https://github.com/Derpyu520/qq-bridge)，
 表情链路设计参考 [QQ-agent](https://github.com/K0nd1us/QQ-agent)。
 [SnowLuma](https://github.com/SnowLuma/SnowLuma)、QQ、微信及模型服务需独立遵循各自条款。
+已取得 SnowLuma 主开发作者对自动部署的书面同意，前提是不修改 SnowLuma 本体；[查看授权记录](doc/assets/SnowLuma.png)。
 本项目不是腾讯官方产品。
