@@ -16,7 +16,7 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 from fastapi.testclient import TestClient
-from chatlocal.linux_distribution import source_files
+from chatlocal.linux_distribution import linux_readme, source_files
 from chatlocal.linux_service import service_name, unit_text
 from chatlocal.mcp_access import MCPAccess
 from chatlocal.snowluma_docker import DockerRuntime
@@ -75,9 +75,7 @@ class InstancesTests(unittest.TestCase):
         for item in (first, second):
             child = Path(item['root'])
             self.assertFalse((child / '.env').exists())
-            readme = ROOT / 'README.linux.md'
-            if not readme.is_file():
-                readme = ROOT / 'README.md'
+            readme = linux_readme(ROOT)
             self.assertEqual((child / 'README.md').read_bytes(), readme.read_bytes())
             self.assertFalse((child / 'README.linux.md').exists())
             self.assertFalse((child / 'data/snowluma-managed').exists())

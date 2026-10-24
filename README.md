@@ -4,7 +4,7 @@
 
 **把 QQ、微信与 B站接入你熟悉的 Agent：查聊天资料、参与群聊，也能搜索和阅读视频。**
 
-[Linux 终端版](README.linux.md) · [MCP 命令行](doc/MCP_CLI.md) · [下载](#下载) · [快速开始](#快速开始) · [Agent 配置教程](doc/AGENT_SETUP.md) · [使用场景](#使用场景) · [完整文档](#常见问题与文档)
+[Linux 终端版](doc/LINUX.md) · [MCP 命令行](doc/MCP_CLI.md) · [下载](#下载) · [快速开始](#快速开始) · [Agent 配置教程](doc/AGENT_SETUP.md) · [使用场景](#使用场景) · [完整文档](#常见问题与文档)
 
 Tulpa 通过同一 MCP 连接提供 QQ、微信与哔哩哔哩能力，三个模块分别授权。Agent 可以查资料、追溯消息、带着自定义人格参与 QQ 群聊，或从视频字幕、真实画面和评论中寻找信息。**目前只维护 MCP 版；旧完整版不再维护。**
 
@@ -23,7 +23,7 @@ Tulpa 通过同一 MCP 连接提供 QQ、微信与哔哩哔哩能力，三个模
 用户级 systemd 服务，以及 SL 本地托管和 Docker 托管。没有桌面时可用浏览器中的 noVNC 扫码。
 多实例各有独立端口、账号数据、SL 容器和 MCP 授权；新增私聊、图片导入、SL 扩展工具及授权编辑。
 
-安装与限制见 [Linux 教程](README.linux.md)、[使用说明](doc/LINUX_TERMINAL.md)；
+安装与限制见 [Linux 教程](doc/LINUX.md)、[使用说明](doc/LINUX_TERMINAL.md)；
 开发分工见 [模型贡献记录](doc/LINUX_CONTRIBUTORS.md)。下方桌面下载和启动教程继续适用于 Windows。
 
 ## 使用场景

@@ -8,11 +8,14 @@ from pathlib import Path, PurePosixPath
 
 
 QUICKSTART_NAMES = frozenset({'TESTING.txt', '看我.txt'})
+LINUX_README = 'doc/LINUX.md'
+LINUX_QUICKSTART = 'doc/LINUX_TESTING.txt'
 ROOT_FILES = frozenset({
     '.env.example', '.gitattributes', '.gitignore', 'LICENSE', 'README.md', 'README.linux.md',
     *QUICKSTART_NAMES, 'setup-linux.sh', 'tulpa',
 })
 DOCUMENTS = frozenset({
+    'LINUX.md', 'LINUX_TESTING.txt',
     'LINUX_AGENT_SETUP.md', 'LINUX_CONTRIBUTING.md', 'LINUX_CONTRIBUTORS.md', 'DOCKER_ACCEPTANCE.md',
     'DOCKER_MANAGED_PLAN.md', 'LINUX_ACCEPTANCE.md', 'LINUX_TERMINAL.md',
     'SECURITY.md', 'TERMINAL_API.md', 'LINUX_THIRD_PARTY.md', 'LINUX_UPGRADE.md', 'SL_TOOLS.md',
@@ -72,14 +75,23 @@ def included(relative):
     return rel.suffix in SOURCE_SUFFIXES.get(folder, set())
 
 
+def linux_readme(root):
+    """Prefer the organized repository guide, with older packages as fallback."""
+    root = Path(root)
+    for name in (LINUX_README, 'README.linux.md', 'README.md'):
+        path = root / name
+        if path.is_file() and not path.is_symlink():
+            return path
+    return root / 'README.md'
+
+
 def source_files(root):
     """Enumerate public source without Git, downloads, or following symlinks."""
     root = Path(root).resolve()
     chosen = []
-    linux_readme = root / 'README.linux.md'
-    prefer_linux_readme = linux_readme.is_file() and not linux_readme.is_symlink()
+    preferred_readme = linux_readme(root)
     for name in ROOT_FILES:
-        if name == 'README.md' and prefer_linux_readme:
+        if name in ('README.md', 'README.linux.md') and root / name != preferred_readme:
             continue
         path = root / name
         if path.is_file() and not path.is_symlink():
@@ -105,4 +117,6 @@ def release_path(relative):
     Extracted packages have only README.md and can be repacked unchanged.
     """
     path = PurePosixPath(relative)
-    return PurePosixPath('README.md') if path.as_posix() == 'README.linux.md' else path
+    aliases = {LINUX_README: 'README.md', 'README.linux.md': 'README.md',
+               LINUX_QUICKSTART: 'TESTING.txt'}
+    return PurePosixPath(aliases.get(path.as_posix(), path.as_posix()))

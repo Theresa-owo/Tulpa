@@ -1,6 +1,6 @@
 # Tulpa MCP 版
 
-0.5.7 只发布 MCP 版，复用 Codex、DeepSeek Harness、Claude Code 等外部 Agent，不运行第二个回答模型。旧完整版停止维护。Linux 使用原 CLI/TUI，见 [Linux 教程](https://github.com/fumingyang2004/Tulpa/blob/v0.5.7/README.linux.md)。
+0.5.7 只发布 MCP 版，复用 Codex、DeepSeek Harness、Claude Code 等外部 Agent，不运行第二个回答模型。旧完整版停止维护。Linux 使用原 CLI/TUI，见 [Linux 教程](https://github.com/fumingyang2004/Tulpa/blob/v0.5.7/doc/LINUX.md)。
 
 ## 第一次使用
 

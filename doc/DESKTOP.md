@@ -15,7 +15,7 @@ Windows 10 / 11 x64、.NET Framework 4.8、系统 WebView2 Evergreen Runtime。�
 使用 Python 3.13 x64。仅运行 MCP 页面时，安装 `requirements/mcp.txt` 后执行 `python app_mcp.py`，访问 `http://127.0.0.1:7861/`；历史读取器和完整构建环境另需准备。构建机还需要 Visual Studio Build Tools 的 C++ x64 工具链和 Windows .NET Framework C# 编译器。
 
 ```powershell
-.\setup.ps1
+.\scripts\windows\setup.ps1
 .\.venv\Scripts\python.exe -m pip install -r requirements/mcp.txt
 .\.venv\Scripts\python.exe desktop/fetch_runtime.py
 # 准备现有 Whisper.cpp 媒体工具（主包不附带语音模型）。
