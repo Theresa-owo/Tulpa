@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./doc/assets/tulpa-hero-fixed.svg" width="100%" alt="Tulpa" />
+  <img src="./doc/assets/tulpa-hero-night.svg" width="100%" alt="Tulpa" />
 </p>
 
 # Tulpa
