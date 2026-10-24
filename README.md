@@ -1,54 +1,40 @@
-![Tulpa](doc/assets/title.png)
+<p align="center">
+  <img src="./doc/assets/tulpa-hero-fixed.svg" width="100%" alt="Tulpa" />
+</p>
 
 # Tulpa
 
-**把 QQ、微信与 B站接入你熟悉的 Agent：查聊天资料、参与群聊，也能搜索和阅读视频。**
+**使用MCP，让你几乎所有的Agent访问QQ/微信/B站，甚至亲自下场水群！**
+
+> 为推动硅基生命的发展和普及贡献一份力量！
 
 [Linux 终端版](doc/LINUX.md) · [MCP 命令行](doc/MCP_CLI.md) · [下载](#下载) · [快速开始](#快速开始) · [Agent 配置教程](doc/AGENT_SETUP.md) · [使用场景](#使用场景) · [完整文档](#常见问题与文档)
 
-Tulpa 通过同一 MCP 连接提供 QQ、微信与哔哩哔哩能力，三个模块分别授权。Agent 可以查资料、追溯消息、带着自定义人格参与 QQ 群聊，或从视频字幕、真实画面和评论中寻找信息。**目前只维护 MCP 版；旧完整版不再维护。**
+Tulpa 通过同一 MCP 连接提供 QQ、微信与哔哩哔哩能力，三个模块分别授权。Agent 可以查资料、追溯消息、带着自定义人格参与 QQ 群聊，或从视频字幕、真实画面和评论中寻找信息。
 
-**桌面发行版：Windows 10 / 11 x64；Linux：x86_64 / ARM64 终端源码版。** 微信支持读取、回复草稿与复制，不能发送。QQ 持续群聊需要独立运行的 OneBot 服务、相应授权，以及持续执行的外部 Agent。
+**桌面发行版：Windows 10 / 11 x64；Linux：x86_64 / ARM64 终端源码版。** 
 
-## Linux 终端版
+## 能做什么？
 
-在 Linux 安装 Python 3.13 或 `uv` 后，进入源码目录运行：
-
-```sh
-./tulpa
-```
-
-首次自动安装依赖、启动后台并打开 TUI；退出界面后后台继续运行。
-提供 CLI / TUI、原有业务 API、MCP、Linux 原生读取器、可选 OCR / 语音 / Office 组件、
-用户级 systemd 服务，以及 SL 本地托管和 Docker 托管。没有桌面时可用浏览器中的 noVNC 扫码。
-多实例各有独立端口、账号数据、SL 容器和 MCP 授权；新增私聊、图片导入、SL 扩展工具及授权编辑。
-
-安装与限制见 [Linux 教程](doc/LINUX.md)、[使用说明](doc/LINUX_TERMINAL.md)；
-开发分工见 [模型贡献记录](doc/LINUX_CONTRIBUTORS.md)。下方桌面下载和启动教程继续适用于 Windows。
-
-## 使用场景
-
-下面是可以交给 Agent 的请求示例，实际能力取决于资料、授权、模型和客户端。
+下面是可以交给 Agent 的请求示例。
 
 ### 让小鲸鱼来水群
 
-> 先列出可用人格和允许的 QQ 群，核对“我的测试群”后，用小鲸鱼持续聊天，直到我停止。接得上话再说，不必每条都回复。
+> 用随包的小鲸鱼持续聊天，你也可以自行编写你的人物卡片。
 
-随包提供小鲸鱼（`little_whale`）、小鲸鱼2号（`little_whale_v2`）和龙娘（`dragon_girl`，测试版），也能用 Markdown 写自己的角色。支持按语境接话、原生 @ 与引用；授权后可看图、发送和收藏表情、给消息贴表情回应，保留理解笔记供后续会话选用。
+随包提供小鲸鱼（`little_whale`）、小鲸鱼2号（`little_whale_v2`）和龙娘（`dragon_girl`，测试版），你也可以用 Markdown 写自己的角色人设卡片。支持按语境接话、原生 @ 与引用；授权后可看图、发送和收藏表情、给消息贴表情回应，保留理解笔记供后续会话选用。
 
 持续聊天会在当前已授权的机器人账号和群里积累群友表达与黑话，潜水时也能学习；同账号同群重开可接续积累。人物卡与学习参考分开，模型可以选择本轮不用。[聊天节奏](doc/MCP_CHAT_TURNS.md) · [实时学习](doc/MCP_LANGUAGE_LEARNING.md)
 
-人格卡只改变表达，不会替换底层模型；发言和表情使用由 Agent 决定。详见 [人格教程](doc/MCP_CHAT.md)与[表情链路](doc/MCP_STICKERS.md)。
+人格卡详见 [人格教程](doc/MCP_CHAT.md)与[表情链路](doc/MCP_STICKERS.md)。
 
 视频链接：[点击这里查看哔哩哔哩视频](https://www.bilibili.com/video/BV16jHL6AE5z)
 
-### 让 Agent 帮你看 B站
+### 刷B站（测试中）
 
-> 搜索 AI 水群相关视频，先看字幕和真实画面，按需要读评论，再告诉我哪些值得看、依据是什么。
+> 直接让Agent帮你刷B站视频，B站信息可直接植入Agent的思维链和工作流。
 
-支持关键词搜索、账号推荐流、视频详情与分 P、带时间戳的字幕、真实抽帧和评论分页。无字幕时可使用已安装的本地 ASR 模型；读不到的内容会明确返回缺失项。B站账号扫码登录，权限在同一 MCP 连接中勾选，**无需导入 QQ / 微信资料，也无需另配模型 API Key**。
-
-B站侧只读，不提供点赞、投币、收藏、关注或评论发布。QQ 原生视频卡片的跳转尚未通过验收，本版不作为可用功能开放。[B站使用说明](doc/BILIBILI_MCP.md)
+支持关键词搜索、账号推荐流、视频详情与分 P、带时间戳的字幕、真实抽帧和评论分页。无字幕时可使用已安装的本地 ASR 模型；读不到的内容会明确返回缺失项。B站账号扫码登录，权限在同一 MCP 连接中勾选。[B站使用说明](doc/BILIBILI_MCP.md)
 
 ### 找回聊过的资料和文件
 
@@ -58,37 +44,20 @@ B站侧只读，不提供点赞、投币、收藏、关注或评论发布。QQ �
 
 ![Tulpa](doc/assets/file_finding.png)
 
-### 把消息整理成有出处的总结
-
-> 总结项目群这周确定的分工和待确认事项，把每项对应的原话列出来。
-
-从消息和文件中整理结论，保留可回查的来源。可用能力及资料来源边界见[功能清单](doc/FEATURES.md)。
-
 ## 为什么用 Tulpa
 
-- **复用熟悉的 Agent**：Tulpa 负责资料读取、检索和授权，外部 Agent 负责理解与任务执行；只用 MCP 无需在 Tulpa 另配模型 API Key。
-- **范围由你决定**：按平台、会话、日期开放资料，写操作另行授权，每个客户端的连接可单独撤销。
-- **查得到，也能回头核对**：从结论展开上下文、查看原文，按需取图片和文件，不必反复复制聊天。
+- **多平台信息整合**：把QQ、微信和哔哩哔哩的能力整合到任意Agent上。
+- **安装方便**：具备图形化界面和CLI界面，直接让你的肥鱼全自动配置即可~
+- **全自动部署**：自动下载、校验、配置和运行SnowLuma和配置OneBot服务。已获得SnowLuma主开发授权！
+- **复用熟悉的 Agent**：MCP协议使得你可以用几乎所有的桌面Agent来使用Tulpa提供的大量接口。
 
-已接入以下客户端：
+经过测试可完美接入以下。理论上可完全兼容所有已发行Agent：
 
-<img src="doc/assets/agents/openai.png" width="24" height="24" alt="Codex"> [Codex](doc/AGENT_SETUP.md#codex) ·
-<img src="doc/assets/agents/claude.png" width="24" height="24" alt="Claude Code"> [Claude Code](doc/AGENT_SETUP.md#claude-code) ·
-<img src="doc/assets/agents/deepseek.png" width="24" height="24" alt="DeepSeek Harness"> [DeepSeek Harness](doc/AGENT_SETUP.md#deepseek-harness) ·
-<img src="doc/assets/agents/antigravity.svg" width="24" height="24" alt="Antigravity"> [Antigravity](doc/AGENT_SETUP.md#google-antigravity) ·
-<img src="doc/assets/agents/workbuddy.png" width="24" height="24" alt="WorkBuddy"> [WorkBuddy](doc/AGENT_SETUP.md#workbuddy)
-
-<details>
-<summary>客户端实测范围</summary>
-
-- **Codex / DeepSeek Harness**：已验证聊天查询、图片和文件读取，以及授权测试群发言、修改群名并恢复。
-- **Claude Code**：已接入并由用户在本机确认功能正常，使用原生 HTTP MCP 与 Bearer Token。
-- **Antigravity**：已验证消息查询和图片理解；验收仅开放只读权限，尚未实测持续群聊、发送与群管理。
-- **WorkBuddy**：已接入并由用户确认跑通；调用记录覆盖消息、图片、文件、群资料及人格发现。
-
-客户端的识图、工具审批与持续运行机制不同。详见 [Agent 教程](doc/AGENT_SETUP.md)和[验证记录](doc/VALIDATION.md)。
-
-</details>
+- <img src="doc/assets/agents/openai.png" width="24" height="24" alt="Codex"> [Codex](doc/AGENT_SETUP.md#codex) ·
+- <img src="doc/assets/agents/claude.png" width="24" height="24" alt="Claude Code"> [Claude Code](doc/AGENT_SETUP.md#claude-code) ·
+- <img src="doc/assets/agents/deepseek.png" width="24" height="24" alt="DeepSeek Harness"> [DeepSeek Harness](doc/AGENT_SETUP.md#deepseek-harness) ·
+- <img src="doc/assets/agents/antigravity.svg" width="24" height="24" alt="Antigravity"> [Antigravity](doc/AGENT_SETUP.md#google-antigravity) ·
+- <img src="doc/assets/agents/workbuddy.png" width="24" height="24" alt="WorkBuddy"> [WorkBuddy](doc/AGENT_SETUP.md#workbuddy)
 
 ## 下载
 
@@ -150,13 +119,10 @@ Windows 双击 `Tulpa.CLI.exe`，或在终端执行 `Tulpa.CLI.exe --json status
 - 微信提供资料读取，回复草稿可由外部 Agent 生成，不提供微信发送能力。
 - 不要分享使用过的整个安装目录，尤其是 `data/`、`imports/`、`.env`、Token 和私人诊断。撤销连接不能收回已交给客户端的内容；MCP 范围限制也不是整台电脑的文件隔离。
 
-## 常见问题与文档
+> [!CAUTION]
+> Tulpa 是独立的第三方项目，与腾讯 / 哔哩哔哩无隶属或授权关系。项目仅供学习与技术研究，使用风险自负。
 
-**能一直后台水群吗？** 持续群聊依赖外部 Agent 保持执行。托盘可保留 Tulpa 服务，但不会自动运行模型。
-
-**连上了却读不到资料？** 先核对来源账号、导入状态、授权范围和日期，再实际调用工具验证；配置成功不代表数据可读。看 [连接验证与排错](doc/AGENT_SETUP.md#重启与常见问题)。
-
-**模型的总结可靠吗？** 检索只覆盖已取得且已授权的资料，引用可回查不代表解释一定正确，重要结论请核对原文。
+## 相关文档
 
 - 接入与群聊：[Agent 教程](doc/AGENT_SETUP.md) · [MCP 权限](doc/MCP.md) · [OneBot](doc/SNOWLUMA_SETUP.md) · [人格](doc/MCP_CHAT.md) · [表情](doc/MCP_STICKERS.md)
 - 资料与调查：[文件](doc/ARTIFACTS.md) · [语音](doc/VOICE.md) · [调查与证据](doc/INVESTIGATION.md) · [工作区](doc/WORKSPACES.md) · [会话记忆](doc/TULPA.md)
