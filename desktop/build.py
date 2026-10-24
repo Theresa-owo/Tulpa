@@ -128,6 +128,7 @@ def build(no_zip=False,qa=False,output=None,lite=False,bundle_snowluma=False):
     if lite:
         subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_bilibili.py'),'--package',str(out)],check=True)
         subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_history_optional.py'),'--package',str(out)],check=True)
+    subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_connection_ui.py'),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_onebot.py'),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_actions.py'),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_chat.py'),'--package',str(out)],check=True)

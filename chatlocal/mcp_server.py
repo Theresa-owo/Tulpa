@@ -250,6 +250,26 @@ class MCPService:
         return dict(result,ok=True,stopped_sessions=stopped,
                     note='权限已保存，原凭证继续有效；请刷新工具列表，需要聊天时重新开始会话。' if result['changed'] else '权限未变化，原会话继续运行。')
 
+    def set_connection_enabled(self, gid, enabled):
+        # Match permission editing: invalidate the revision before cancelling
+        # queues. Do not invert the send guard's operation/turn lock ordering.
+        with self.tools.chat.lock:
+            result=self.access.set_enabled(gid,enabled)
+            if result['changed']:
+                self.cancel(gid)
+                self.tools.chat.stop_all(gid,'连接开关已改变，请重新开始会话')
+        if enabled and not self.status()['running']:
+            self.access.configure(True,self.access.settings()['port'])
+            self.start()
+        return dict(result,service=self.status())
+
+    def delete_connection(self, gid):
+        with self.tools.chat.lock:
+            self.access.revoke(gid)
+            self.cancel(gid)
+            self.tools.chat.stop_all(gid,'连接已删除')
+            return self.access.delete(gid)
+
     def stop(self):
         with self.lock:
             self.tools.chat.suspend()

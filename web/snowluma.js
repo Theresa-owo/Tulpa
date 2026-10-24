@@ -125,7 +125,7 @@
   function mount(host,{prefix,onSaved=async()=>{}}={}){
     const id=name=>'snow-managed-'+prefix+'-'+name,el=name=>document.getElementById(id(name));
     host.classList.add('snowluma-setup','snow-managed');
-    host.innerHTML=`<h3>连接 QQ</h3><p>勾选协议，点击“一键配置”。Tulpa 会自动准备 SnowLuma、配置连接并接入已登录的 QQ，无需手动下载或填写密码、端口、Token。</p>
+    host.innerHTML=`<h3>SnowLuma</h3>
       <label class="desktop-check"><input id="${id('consent')}" type="checkbox">同意 SnowLuma 使用细则和隐私政策，授权自动部署、配置和连接 QQ</label>
       <div class="snow-managed-actions"><button id="${id('start')}" type="button" class="primary-button" disabled>一键配置</button><button id="${id('retry')}" type="button" hidden>重试</button><button id="${id('cancel')}" type="button" hidden>取消本次接入</button><button id="${id('revoke')}" type="button" hidden>撤销自动配置授权</button></div>
       <p id="${id('status')}" role="status" aria-live="polite"></p>

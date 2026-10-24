@@ -5,7 +5,7 @@ from urllib.parse import urlparse
 import anyio
 from fastapi import HTTPException, Request
 
-from .mcp_access import MCPAccess, AccessDenied, GrantConflict
+from .mcp_access import MCPAccess, AccessDenied, GrantConflict, connection_body
 from .mcp_server import MCPService
 from .store import Store
 
@@ -72,6 +72,7 @@ def install_mcp_routes(app, store=None):
         local(request, True)
         from .mcp_qq_permissions import live_grant
         try:
+            body=connection_body(body)
             if not isinstance(body.get('platforms'),list) or any(p not in ('qq','wechat') for p in body['platforms']):
                 raise ValueError('请选择允许访问的平台。')
             if 'history_platforms' in body and (not isinstance(body['history_platforms'],list) or any(p not in body['platforms'] for p in body['history_platforms'])):
@@ -93,6 +94,42 @@ def install_mcp_routes(app, store=None):
         try:return service.update_permissions(gid, body)
         except GrantConflict as exc:raise HTTPException(409, str(exc)) from None
         except ValueError as exc:raise HTTPException(400, str(exc)) from None
+
+    @app.put('/api/mcp/connections/{gid}/state')
+    def connection_state(gid: str, request: Request, body: dict):
+        local(request, True)
+        if set(body)!={'enabled'}:raise HTTPException(400,'连接开关无效。')
+        try:return service.set_connection_enabled(gid,body['enabled'])
+        except ValueError as exc:raise HTTPException(400,str(exc)) from None
+
+    @app.delete('/api/mcp/connections/{gid}')
+    def delete_connection(gid: str, request: Request):
+        local(request, True)
+        return service.delete_connection(gid)
+
+    @app.get('/api/mcp/learning/accounts')
+    def learning_accounts(request: Request):
+        local(request)
+        groups=service.tools.chat.learning.local_libraries()
+        return dict(accounts=[dict(account=a,groups=sum(g['account']==a for g in groups)) for a in sorted({g['account'] for g in groups})])
+
+    @app.get('/api/mcp/learning/groups')
+    def learning_groups(request: Request, account: str):
+        local(request)
+        return dict(groups=[g for g in service.tools.chat.learning.local_libraries() if g['account']==account])
+
+    @app.get('/api/mcp/learning/library')
+    def local_library(request: Request, account: str, group: str):
+        local(request)
+        try:return service.tools.chat.learning.local_library(account,group)
+        except ValueError as exc:raise HTTPException(400,'本机没有这个账号和群的学习记录。') from exc
+
+    @app.post('/api/mcp/learning/library')
+    def change_local_library(request: Request, body: dict):
+        local(request,True)
+        if set(body)!={'account','group','change'} or not isinstance(body['change'],dict):raise HTTPException(400,'学习设置无效。')
+        try:return service.tools.chat.learning.local_library(body['account'],body['group'],body['change'])
+        except ValueError as exc:raise HTTPException(400,'未能保存，请检查条目和设置。') from exc
 
     def token_for(body, *, extra=()):
         if set(body)-{'token',*extra} or not isinstance(body.get('token'),str):raise HTTPException(400,'连接凭据字段无效。')

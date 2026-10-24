@@ -65,7 +65,7 @@ function preview(multiple,httpOnly=false){
       const httpField=page.locator(edition==='full'?'#desktop-sender-url':'#lite-onebot-url');
       const imports=()=>requests.filter(r=>r.path.endsWith('/import'));
       const has=async(text,p='mcp')=>page.waitForFunction(([id,text])=>document.getElementById(id).textContent.includes(text),['snow-managed-'+p+'-status',text]);
-      async function openMcp(){await page.locator('#open-mcp').click();await mcpDialog.waitFor({state:'visible'});await q('folder').evaluate(e=>{for(let p=e.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;});}
+      async function openMcp(){await page.locator(edition==='lite'?'#home-connect':'#open-mcp').click();await mcpDialog.waitFor({state:'visible'});await page.locator('#mcp-module-qq').check();await q('folder').evaluate(e=>{for(let p=e.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;});}
       async function screenshot(name){if(process.env.SNOWLUMA_UI_SCREENSHOTS){fs.mkdirSync(process.env.SNOWLUMA_UI_SCREENSHOTS,{recursive:true});await q('folder',await settingsDialog.isVisible()?prefix:'mcp').scrollIntoViewIfNeeded();await page.screenshot({path:path.join(process.env.SNOWLUMA_UI_SCREENSHOTS,edition+'-'+name+'.png')});}}
       await page.goto(origin);await openMcp();
       assert.equal(await page.locator('[id^=snow-managed-][id$=-inspect]').count(),0);
@@ -82,15 +82,15 @@ function preview(multiple,httpOnly=false){
       assert.deepEqual(imports()[0].body,{selection_id:'fixture-preview',account:'12345',http_id:'http1',ws_id:'ws1'});
       assert.equal(requests.filter(r=>r.path.endsWith('/managed/start')).length,0);
       // The actual MCP shortcut switches to the other actual modal, without a rescan.
-      const count=requests.length;await page.locator('#mcp-open-onebot').click();await settingsDialog.waitFor({state:'visible'});
+      const count=requests.length;await page.locator('#mcp-open-onebot').evaluate(b=>b.closest('details').open=true);await page.locator('#mcp-open-onebot').click();await settingsDialog.waitFor({state:'visible'});
       assert.equal(await q('folder',prefix).inputValue(),'C:\\SnowLuma-fixture');assert.equal(await q('consent',prefix).isChecked(),true);
       await has('已核对',prefix);assert.equal(await q('start',prefix).textContent(),'已载入配置');assert.equal(await q('start',prefix).isEnabled(),false);
       assert.equal(requests.length,count);assert.equal(await manual.getAttribute('open'),null);assert.equal(await httpField.inputValue(),'http://127.0.0.1:4202/api');await screenshot('shared-saved');
       // Path changes invalidate consent in BOTH views; a bad path preserves settings.
-      await q('folder',prefix).fill('C:\\Missing');assert.equal(await q('consent').isChecked(),false);
+      await q('folder',prefix).evaluate(e=>{for(let p=e.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;});await q('folder',prefix).fill('C:\\Missing');assert.equal(await q('consent').isChecked(),false);
       failInspect=true;await q('consent',prefix).check();await q('start',prefix).click();await has('文件夹不存在',prefix);
       assert.equal(imports().length,1);assert.equal(await httpField.inputValue(),'http://127.0.0.1:4202/api');
-      failInspect=false;await q('folder',prefix).fill('C:\\SnowLuma-fixture');await q('consent',prefix).check();
+      failInspect=false;await q('folder',prefix).evaluate(e=>{for(let p=e.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;});await q('folder',prefix).fill('C:\\SnowLuma-fixture');await q('consent',prefix).check();
       // Changed server-side terms stop the pending click before any inspection/write.
       managedState={...managedState,consent_fingerprint:'changed'};const beforeTerms=requests.length;
       await q('start',prefix).click();await has('勾选',prefix);assert.equal(await q('consent',prefix).isChecked(),false);assert.equal(requests.length,beforeTerms);
@@ -112,10 +112,10 @@ function preview(multiple,httpOnly=false){
       expired=true;await q('apply').click();await has('已过期');assert.equal(await q('existing').isVisible(),false);
       assert.equal(await q('start').isEnabled(),true);expired=false;await q('start').click();await has('已核对');
       // Manual advanced connection and model-independent save remain usable.
-      await page.locator('#mcp-open-onebot').click();await settingsDialog.waitFor({state:'visible'});await manual.locator('summary').click();
+      await page.locator('#mcp-open-onebot').evaluate(b=>b.closest('details').open=true);await page.locator('#mcp-open-onebot').click();await settingsDialog.waitFor({state:'visible'});await manual.locator('summary').click();
       await httpField.fill('http://127.0.0.1:19002/manual');await manual.locator('button[type=submit]').click();
       await page.waitForFunction(id=>document.getElementById(id).textContent.includes('已连接'),edition==='full'?'desktop-onebot-status':'lite-onebot-result');assert.equal(settings.sender_url,'http://127.0.0.1:19002/manual');
-      await manual.locator('summary').click();await q('folder',prefix).fill('C:\\Fresh-draft');
+      await manual.locator('summary').click();await q('folder',prefix).evaluate(e=>{for(let p=e.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;});await q('folder',prefix).fill('C:\\Fresh-draft');
       await page.setViewportSize({width:390,height:844});await screenshot('narrow');assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
       assert.deepEqual(errors,[]);assert.ok(!requests.some(r=>Object.keys(r.body||{}).some(k=>k.endsWith('token'))&&r.path.includes('snowluma')));
       // Synthetic F5 has no browser default: navigation proves our page handler

@@ -138,7 +138,7 @@ class QQExtensions:
         if not account.isascii() or not account.isdigit() or not uid.isascii() or not uid.isdigit() or not isinstance(flag,str) or not 1<=len(flag)<=800:return
         with self.access.connect() as db:
             if not db.execute('SELECT enabled FROM settings WHERE id=1').fetchone()[0]:return
-            scopes=[json.loads(r[0]) for r in db.execute('SELECT scope FROM grants WHERE revoked=0')]
+            scopes=[json.loads(r[0]) for r in db.execute('SELECT scope FROM grants WHERE revoked=0 AND paused=0')]
             now=time.time()
             for scope in scopes:
                 if not scope.get('qq_friends') or scope.get('chat_account')!=account:continue
