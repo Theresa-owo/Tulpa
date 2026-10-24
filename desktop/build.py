@@ -127,6 +127,7 @@ def build(no_zip=False,qa=False,output=None,lite=False,bundle_snowluma=False):
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp.py'),'--package',str(out)],check=True)
     if lite:
         subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_bilibili.py'),'--package',str(out)],check=True)
+        subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_cli.py'),'--package',str(out)],check=True)
         subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_history_optional.py'),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_connection_ui.py'),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_onebot.py'),'--package',str(out)],check=True)
@@ -194,6 +195,9 @@ def build(no_zip=False,qa=False,output=None,lite=False,bundle_snowluma=False):
     if qa:cmd.insert(1,'/define:QA')
     if lite:cmd.insert(1,'/define:MCP_ONLY')
     subprocess.run(cmd,check=True)
+    if lite:
+        subprocess.run([str(csc),'/nologo','/target:exe','/platform:x64','/optimize+',f'/win32icon:{icon}',
+            f'/out:{register("Tulpa.CLI.exe")}', '/r:System.dll',str(ROOT/'desktop/CLI.cs')],check=True)
     subprocess.run([str(csc),'/nologo','/target:winexe','/platform:x64','/optimize+',f'/win32icon:{icon}',
         f'/out:{register("Tulpa.Support.exe")}', '/r:System.dll','/r:System.Core.dll','/r:System.Drawing.dll',
         '/r:System.Windows.Forms.dll','/r:System.Web.Extensions.dll',str(ROOT/'desktop/Support.cs')],check=True)
@@ -202,6 +206,7 @@ def build(no_zip=False,qa=False,output=None,lite=False,bundle_snowluma=False):
     if lite:
         write('开始使用.txt', 'Tulpa MCP '+VERSION+'\n\n完整解压后双击 Tulpa.exe。\n1. 点击“开始创建链接”，勾选 QQ、微信或哔哩哔哩及所需能力。名称可留空。\n2. QQ 卡片内可配置 SnowLuma；B站账号在左侧扫码登录。只有选中聊天记录读取但尚无资料时才会提示导入。\n3. 点击“一键开启 MCP”，复制连接配置到 Codex、DeepSeek Harness 等 Streamable HTTP 客户端。\n4. 首页链接列表可折叠，每条链接可单独启停或删除。左侧“QQ 学习管理”按 QQ 账号和群管理本地积累。\n5. Windows 10/11 x64，需要系统 Microsoft Edge WebView2 Evergreen Runtime。多数系统已安装；缺少时安装微软官方运行时：https://developer.microsoft.com/microsoft-edge/webview2/ 。\n6. 保留本安装内的人格、授权和学习库；不要同时打开两个指向同一数据目录的版本。\n界面说明：doc/MCP_CONNECTION_UI.md；功能教程：doc/MCP_LITE.md。\n')
     with (out/'开始使用.txt').open('a',encoding='utf-8') as guide:
+        if lite:guide.write('\n命令行：双击 Tulpa.CLI.exe，或在终端运行 .\\Tulpa.CLI.exe --json status。Agent 可用 connections、sl、bilibili、learning、tools、call 配置和调用；详见 doc/MCP_CLI.md。托盘菜单也可打开命令行。\n')
         guide.write('\nSnowLuma 自动配置：在“开始创建链接 → QQ → QQ 连接”或左侧“OneBot 设置”勾选使用细则与自动配置授权，点击“一键配置”。Tulpa 校验随包运行文件或自动从官方渠道下载固定版本，然后自动配置端口、密码和 Token。只有多个 QQ 进程或尚未登录时需要选择账号或扫码。已有独立服务可从高级选项导入，完整步骤、取消与恢复说明见 doc/SNOWLUMA_MANAGED.md。\n')
         guide.write('\n从旧版本升级：先看 doc/UPGRADE.md。可将该文档交给 Codex 或 DeepSeek Harness，使用新版 scripts/upgrade_installation.py 更新原安装目录，自动保留聊天、附件、MCP 授权和实时进度，无需重新导入。升级前从托盘彻底退出 Tulpa。\n持续群聊和表情包仅向 MCP 开放：OneBot HTTP + 正向 WebSocket，按连接分别授权；完整步骤见 doc/MCP.md。\n')
     tree(ROOT/'desktop/licenses','licenses')

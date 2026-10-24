@@ -21,6 +21,8 @@ def create_app():
     install_desktop_routes(app)
     install_mcp_routes(app)
     install_component_routes(app)
+    from chatlocal.cli_runtime import install as install_cli
+    install_cli(app)
     web=ROOT/'web'
 
     @app.get('/api/read-options')
