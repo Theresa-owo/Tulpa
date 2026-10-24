@@ -12,11 +12,12 @@
 <button id="open-artifacts" class="nav-button"><svg><use href="#i-workspace"/></svg>文件 / 资料</button>
 <button id="open-mcp" class="nav-button"><svg><use href="#i-sliders"/></svg>连接外部 Agent</button>
 <button id="open-onebot" class="nav-button"><svg><use href="#i-sliders"/></svg>OneBot 设置</button>
+<a class="nav-button" href="/bilibili">B站账号设置</a>
 <div class="sidebar-bottom"><button id="live-summary" class="live-summary" type="button">读取实时状态…</button><p class="field-hint" id="lite-version">本机资料服务</p></div>
 </aside>
 <main id="lite-main"><header><span class="desktop-eyebrow">TULPA / MCP SERVICE</span><h1>让你的 Agent，读懂真实交流。</h1><p>资料留在本机，任务交给你选择的 Agent。</p></header>
 <section class="lite-status"><h2>本机服务</h2><p id="lite-service" role="status">正在连接…</p><p id="lite-data"></p><button id="home-connect" class="primary-button">连接 Agent</button><button id="home-import">导入聊天</button></section>
-<section class="lite-guide"><h2>从这里开始</h2><ol><li><strong>导入资料</strong><p>登录 QQ / 微信，选择账号和会话。开启实时读取后，新消息继续入库。</p></li><li><strong>授权连接</strong><p>为每个 Agent 选择范围和权限，复制 MCP 地址与 Token。</p></li><li><strong>在 Agent 中工作</strong><p>支持 Codex、DeepSeek Harness 等 Streamable HTTP MCP 客户端，无需给 Tulpa 配置模型。</p></li></ol></section>
+<section class="lite-guide"><h2>从这里开始</h2><ol><li><strong>选择用途</strong><p>仅实时水群：连接 QQ 即可，无需导入。需要搜索旧聊天时，再按需导入 QQ / 微信资料。</p></li><li><strong>授权连接</strong><p>历史读取、实时 QQ 与 B站权限分别选择；为每个 Agent 选择范围，复制 MCP 配置。</p></li><li><strong>在 Agent 中工作</strong><p>支持 Codex、DeepSeek Harness 等 MCP 客户端，无需给 Tulpa 配置模型。B站登录单独管理，工具权限统一在此连接中勾选。</p></li></ol></section>
 <section><h2>可选组件</h2><strong>本地语音转写</strong><p class="field-hint">主包不带语音模型。需要时下载约 181 MB，之后可离线使用；不上传语音。Office 原文件下载后由外部 Agent 自行读取。</p><p id="voice-component-status" role="status">正在检查…</p><progress id="voice-component-progress" max="100" value="0" hidden></progress><button id="voice-component-install">一键安装语音模型</button><button id="voice-component-cancel" hidden>取消下载</button></section>
 <section><h2>操作记录</h2><p class="field-hint">发送与群管理默认关闭。在连接权限中勾选后直接执行，不再逐项审批。可随时撤销连接。</p><div id="lite-operations">暂无操作。</div></section>
 <p id="lite-error" role="alert"></p></main></div>

@@ -19,6 +19,8 @@ and the source commit are recorded in `build-manifest.json`.
 | websockets 15.0.1 | BSD-3-Clause; original LICENSE retained in package `.dist-info` |
 | dnspython 2.9.0 | [ISC](https://github.com/rthalley/dnspython/blob/v2.9.0/LICENSE); bounded DNS / TLS queries; original package notices retained |
 | MCP Python SDK 1.26.0 | [MIT](https://github.com/modelcontextprotocol/python-sdk/blob/v1.26.0/LICENSE); package license retained |
+| polylens-bilibili-mcp 0.13.0 selected read core | [Apache-2.0](https://github.com/liu-xindi/polylens-bilibili-mcp/tree/35b9c852342a9e8b8d09db78548d42d62b6f9d2a); original LICENSE and source hashes in `tulpa_bilibili/_vendor/`; upstream MCP server and social-write tools are not bundled |
+| Segno 1.6.6 | BSD-3-Clause; local QR rendering, original package license retained |
 | qq-bridge 群聊行为与小鲸鱼角色卡 | [MIT](https://github.com/Derpyu520/qq-bridge/blob/9df6a7e7fc5abcb36793337f778483bd442a3d2d/LICENSE); 小鲸鱼角色卡经 Tulpa 维护者按需改编，保留来源及许可；行为与工具协议单独适配，仅用于 MCP 持续群聊，见 `desktop/licenses/qq-bridge-MIT.txt`（发布包 `licenses/qq-bridge-MIT.txt`） |
 | QQ reader (`chatlog-keeper`) | [MIT](https://github.com/labazhou2024/chatlog-keeper/blob/b55675779e50edec913fab9d891e4185c8f7c9ac/LICENSE); commit `b55675779e50edec913fab9d891e4185c8f7c9ac` |
 | WeChat reader (`wechatauto-replica`) | [Apache-2.0](https://github.com/fanyuantaier/wechatauto-replica/blob/492a8fb70b95865613d6d8d9740323233dbfa197/LICENSE); commit `492a8fb70b95865613d6d8d9740323233dbfa197` |
@@ -69,6 +71,13 @@ privacy documents are retained. End users explicitly consent before deployment.
 The official binary archive contains no Tulpa credentials or user configuration.
 
 ## Not bundled
+
+The Bilibili module references Yueying 0.2.1 (MIT, commit
+`e8fb72eabf9a2193b8d8cf5ce4e5c17de4edbcfe`) and bilibili-notify v0.10.1
+(MIT, commit `49400e2b69b7c8f8af5b89ef8e460f0939cbbdfc`) for media flow and
+native card protocol, without copying their code or bundling their services.
+Local ASR reuses the existing optional Whisper.cpp model. No new hosted model
+or API credential is required. See [Bilibili usage and limitations](BILIBILI_MCP.md).
 
 NapCat, QQ and WeChat clients are not redistributed. No Microsoft / Office fonts
 are redistributed. User-provided credentials,

@@ -15,6 +15,8 @@ def install_mcp_routes(app, store=None):
     access = MCPAccess(store)
     service = MCPService(access)
     app.state.tulpa_mcp = service
+    from tulpa_bilibili.web import install as install_bilibili
+    install_bilibili(app, service.tools.bilibili)
     previous = app.router.lifespan_context
 
     @asynccontextmanager
@@ -72,9 +74,11 @@ def install_mcp_routes(app, store=None):
         try:
             if not isinstance(body.get('platforms'),list) or any(p not in ('qq','wechat') for p in body['platforms']):
                 raise ValueError('请选择允许访问的平台。')
+            if 'history_platforms' in body and (not isinstance(body['history_platforms'],list) or any(p not in body['platforms'] for p in body['history_platforms'])):
+                raise ValueError('历史数据读取范围必须属于所选平台。')
             with store.connect() as db:
-                for platform in body.get('platforms',[]):
-                    if platform=='qq' and live_grant(body):continue
+                for platform in body.get('history_platforms',body.get('platforms',[])):
+                    if 'history_platforms' not in body and platform=='qq' and live_grant(body):continue
                     if not db.execute('SELECT 1 FROM messages WHERE platform=? LIMIT 1',(platform,)).fetchone():
                         raise ValueError('请先导入所选平台的聊天，确认来源账号后再创建连接。')
             result=access.create(body)

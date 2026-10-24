@@ -6,7 +6,7 @@
 
 [Linux 终端版](README.linux.md) · [下载](#下载) · [快速开始](#快速开始) · [Agent 配置教程](doc/AGENT_SETUP.md) · [使用场景](#使用场景) · [完整文档](#常见问题与文档)
 
-Tulpa 在本机整理聊天、图片和文件，让 Agent 按你授权的范围查资料、追溯消息，或带着自定义人格参与 QQ 群聊。已有 Agent 选 MCP 轻量版；想直接在 Tulpa 里提问，选完整版。
+Tulpa 在本机整理聊天、图片和文件，让 Agent 按你授权的范围查资料、追溯消息，或带着自定义人格参与 QQ 群聊。目前只维护 MCP 版，复用已有 Agent；旧完整版不再维护。
 
 **桌面发行版：Windows 10 / 11 x64；Linux：x86_64 / ARM64 终端源码版。** 微信支持读取、回复草稿与复制，不能发送。QQ 持续群聊需要独立运行的 OneBot 服务、相应授权，以及持续执行的外部 Agent。
 
@@ -54,7 +54,7 @@ Tulpa 在本机整理聊天、图片和文件，让 Agent 按你授权的范围�
 
 > 总结项目群这周确定的分工和待确认事项，把每项对应的原话列出来。
 
-从消息和文件中整理结论，保留可回查的来源。完整版还提供回复草稿、会话记忆、关注卡和持续调查工作区；完整能力见[功能清单](doc/FEATURES.md)。
+从消息和文件中整理结论，保留可回查的来源。可用能力及资料来源边界见[功能清单](doc/FEATURES.md)。
 
 ## 为什么用 Tulpa
 
@@ -88,9 +88,9 @@ Tulpa 在本机整理聊天、图片和文件，让 Agent 按你授权的范围�
 | --- | --- | --- |
 | **MCP 轻量版** | 使用已有 Agent 查资料或参与 QQ 群聊 | [0.5.6 ZIP](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.6/Tulpa-MCP-0.5.6-win-x64.zip) |
 | **Linux 终端版** | Linux x86_64 / ARM64，CLI/TUI、MCP 及可选内置模型 | [0.5.6 tar.gz](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.6/Tulpa-0.5.6-linux.tar.gz) |
-| **完整版（上一版）** | 在 Tulpa 内提问，使用回复、记忆和工作区；也能接外部 Agent | [0.5.5 ZIP](https://github.com/fumingyang2004/Tulpa/releases/download/v0.5.5/Tulpa-0.5.5-win-x64.zip) |
 
-**0.5.6 本次发布 MCP 轻量版与 Linux 终端版，Windows 完整版维持 0.5.5。** Windows 发行包自带 Python；完整版内置 Harness、本地 OCR / 语音 / Office 解析与固定 WebView2，轻量版使用系统 WebView2 Evergreen Runtime，语音模型按需安装。[版本区别](doc/MCP_LITE.md) · [最新发布](https://github.com/fumingyang2004/Tulpa/releases/latest) · [0.5.6 更新说明](doc/releases/0.5.6.md)
+
+**当前维护 MCP 版，旧完整版已停止维护。** 已发布的 0.5.6 提供 MCP 轻量版与 Linux 终端版。Windows MCP 包自带 Python，使用系统 WebView2 Evergreen Runtime，语音模型按需安装。[版本区别](doc/MCP_LITE.md) · [最新发布](https://github.com/fumingyang2004/Tulpa/releases/latest) · [0.5.6 更新说明](doc/releases/0.5.6.md)
 
 需要 **.NET Framework 4.8**。下载 ZIP 后完整解压到可写目录，打开 `Tulpa/Tulpa.exe`；不要从压缩包直接运行。**`Source code` 不是安装包，两版不要混装。** QQ / 微信客户端、模型服务及可选 OneBot 服务需自行准备。
 
@@ -109,11 +109,17 @@ Tulpa 在本机整理聊天、图片和文件，让 Agent 按你授权的范围�
 **无需先导入整库历史。** 这条路径直接接收 OneBot 实时事件。
 
 1. 启动 QQ 和 Tulpa；在连接 QQ 中勾选协议并点击“一键配置”，或从高级选项导入已有 OneBot 连接。持续群聊需要 **HTTP + 正向 WebSocket**。[连接教程](doc/SNOWLUMA_MANAGED.md)
-2. 在 **连接外部 Agent**（或 **外部 Agent / MCP**）选择 QQ，在会话来源选择 **QQ 当前群聊 · 无需导入**，只选测试群；截止日期留空以接收未来消息。
+2. 在 **连接外部 Agent** 勾选实时 QQ / 持续聊天权限，无需勾选上方历史读取；在会话来源选择 **QQ 当前群聊 · 无需导入**，只选测试群；截止日期留空以接收未来消息。
 3. 开放持续群聊和发送权限，按需加看图、表情发送或收藏。创建连接、检测工具，再按 [Agent 教程](doc/AGENT_SETUP.md)配置并重连客户端。
 4. 在外部 Agent 的**专用对话**中使用上面的水群示例。想换龙娘，选择 `dragon_girl`。新人格放进当前安装目录的 `chatlocal/prompts/mcp_chat/`，重新列出即可发现。
 
 保持 QQ、OneBot、Tulpa 和外部 Agent 运行。宿主结束回合、达到预算、退出或休眠后，Tulpa 不会自行继续推理。可在 Tulpa 点 **停止聊天 / 停止全部群聊**；已发出的消息不会因此撤回。改过人格后，停止并重新开启会话才会采用新设定。
+
+### 我要看 B站视频
+
+开发版在同一 MCP 授权页增加 **B站只读**：扫码登录后可搜索、读取推荐、字幕/本地 ASR、真实画面及评论。无需导入聊天、无需再建 B站专用 MCP，也不自动开启水群。
+
+QQ 原生分享另行勾选目标群权限；当前 SnowLuma 2.1.1 的卡片跳转实测提示小程序已下架，该形态会被阻止发送，**分享尚未通过验收**。[使用与限制](doc/BILIBILI_MCP.md)
 
 ### 我要查 QQ / 微信历史
 

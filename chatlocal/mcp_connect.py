@@ -25,7 +25,7 @@ def codex_config(url, token, scope=None, *, server_name='tulpa'):
     server_name = codex_server_name(server_name)
     stanza = ('[mcp_servers.'+server_name+']\nurl = '+json.dumps(url)+'\nhttp_headers = { Authorization = '+
               json.dumps('Bearer '+token)+' }\ntool_timeout_sec = 240\n')
-    for flag,tool in [('send','send_qq_message'),('manage','manage_qq_group')]:
+    for flag,tool in [('send','send_qq_message'),('manage','manage_qq_group'),('bilibili_share','share_video_to_qq_group')]:
         if (scope or {}).get(flag) is True:
             stanza += f'\n[mcp_servers.{server_name}.tools.{tool}]\napproval_mode = "approve"\n'
     if (scope or {}).get('chat') is True:
@@ -92,7 +92,8 @@ async def test_connection(url, token):
             async with ClientSession(read, write) as client:
                 await client.initialize()
                 tools = await client.list_tools()
-                status = await client.call_tool('get_data_status', {})
-                if status.isError:
-                    raise ValueError('资料状态读取未通过，请重新检查授权范围。')
+                if any(t.name=='get_data_status' for t in tools.tools):
+                    status = await client.call_tool('get_data_status', {})
+                    if status.isError:
+                        raise ValueError('资料状态读取未通过，请重新检查授权范围。')
                 return dict(ok=True, tools=len(tools.tools), onebot=any(t.name=='read_qq_group' for t in tools.tools))

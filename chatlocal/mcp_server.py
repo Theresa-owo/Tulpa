@@ -59,8 +59,8 @@ class MCPService:
             rows = await anyio.to_thread.run_sync(self.tools.schemas, grant)
             self.access.ensure_revision(grant)
             return [types.Tool(name=s['name'], description=s['description'], inputSchema=s['parameters'],
-                    annotations=types.ToolAnnotations(readOnlyHint=s['name'] not in QQ_WRITES and s['name'] not in CHAT_TOOLS and s['name'] not in MEDIA_WRITES and s['name'] not in ('prepare_file', 'download_file', 'transcribe_voice', 'read_qq_group', 'get_group_knowledge','send_qq_message','manage_qq_group'),
-                        destructiveHint=s['name'] in ('manage_qq_group','qq_group_action','qq_message_action','qq_file_action','qq_friend_action','qq_qzone_action','qq_album_action'), openWorldHint=s['name'] in QQ_WRITES-{'import_qq_media'} or s['name'] in ('send_qq_message','manage_qq_group','send_chat_reply','send_chat_message','send_chat_sticker','collect_chat_sticker','react_to_chat_message'))) for s in rows]
+                    annotations=types.ToolAnnotations(readOnlyHint=s['name'] not in QQ_WRITES and s['name'] not in CHAT_TOOLS and s['name'] not in MEDIA_WRITES and s['name'] not in ('prepare_file', 'download_file', 'transcribe_voice', 'read_qq_group', 'get_group_knowledge','send_qq_message','manage_qq_group','share_video_to_qq_group'),
+                        destructiveHint=s['name'] in ('manage_qq_group','qq_group_action','qq_message_action','qq_file_action','qq_friend_action','qq_qzone_action','qq_album_action'), openWorldHint=s['name'] in QQ_WRITES-{'import_qq_media'} or s['name'] in ('send_qq_message','manage_qq_group','send_chat_reply','send_chat_message','send_chat_sticker','collect_chat_sticker','react_to_chat_message','share_video_to_qq_group'))) for s in rows]
 
         @protocol.call_tool(validate_input=False)
         async def call_tool(name, arguments):
@@ -230,6 +230,7 @@ class MCPService:
                 self.error = 'MCP 服务未能启动，请查看依赖安装与端口设置。'
 
     def cancel(self, gid=None):
+        self.tools.bilibili.cancel(gid)
         with self.pending_lock:
             for (owner, _), event in self.pending.items():
                 if gid is None or gid == owner:

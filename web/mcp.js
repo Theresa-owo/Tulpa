@@ -7,24 +7,24 @@
     <div class="mcp-body">
       <p>让 Codex、DeepSeek Harness 等 MCP 客户端使用你授权的资料与 QQ 操作。无需配置 Tulpa 模型，发送和管理默认关闭；勾选授权后可直接执行，无需逐次审批。</p>
       <section class="mcp-chat-entry"><div><h3>群聊与学习</h3><p id="mcp-chat-summary" class="mcp-muted" role="status">查看会话状态与学习记录</p></div><button id="mcp-chat-open" type="button" aria-haspopup="dialog" aria-controls="mcp-chat-manager">管理</button></section>
-      <section class="mcp-step"><h3>1. 准备资料</h3><p id="mcp-data-status" role="status"></p><button id="mcp-open-data" type="button">导入 / 管理聊天</button>
+      <section class="mcp-step"><h3>1. 准备连接</h3><p id="mcp-data-status" role="status"></p><button id="mcp-open-data" type="button">可选：导入 / 管理历史聊天</button>
       <p id="mcp-onebot-status" class="mcp-muted"></p><div id="mcp-snowluma-managed"></div><button id="mcp-open-onebot" type="button">已有 OneBot / 高级连接</button> <button id="mcp-test-onebot" type="button">检测 OneBot</button></section>
       <p id="mcp-service-status" role="status"></p>
       <label class="mcp-background" id="mcp-background-label" hidden><input id="mcp-background" type="checkbox">关闭窗口后留在托盘，继续提供服务</label>
       <details id="mcp-create-section" open><summary>2. 选择范围并创建连接</summary>
-        <p class="mcp-muted">仅授权访问当前 Tulpa 的本地资料。创建连接时可一并开启服务；外部 Agent 读到的内容可能发给它的模型服务。</p>
+        <p class="mcp-muted">历史读取、实时 QQ 与 B站分别授权，使用同一份连接。仅水群或看 B站时，无需导入 QQ / 微信数据。外部 Agent 读到的内容可能发给它的模型服务。</p>
         <form id="mcp-create-form" autocomplete="off">
           <label for="mcp-name">连接名称</label><input id="mcp-name" required maxlength="60" placeholder="例如：Codex 课程资料调查">
-          <fieldset><legend>允许访问</legend><label><input id="mcp-qq" type="checkbox" checked> QQ</label><label><input id="mcp-wechat" type="checkbox" checked> 微信</label>
-            <label class="mcp-all"><input id="mcp-all" type="checkbox">允许所选平台全部会话（包括以后入库的会话）</label>
-            <div id="mcp-picker"><label for="mcp-source">会话来源</label><select id="mcp-source"><option value="history">已导入的历史会话</option><option value="groups">QQ 当前群聊 · 无需导入</option><option value="friends">QQ 当前好友私聊 · 无需导入</option></select><label for="mcp-search">选择会话</label><input id="mcp-search" type="search" placeholder="搜索名称或号码"><div id="mcp-chats" class="mcp-chats"></div><button id="mcp-more" type="button" hidden>更多会话</button><p id="mcp-selection" class="mcp-muted">已选择 0 个会话</p></div>
-          </fieldset>
-          <div class="mcp-dates"><label>开始日期<input id="mcp-start" type="date"></label><label>截止日期<input id="mcp-end" type="date"></label></div><small class="mcp-muted">留空表示不限制；截止日期包含当天。身份目录也遵守这个范围。</small>
-          <fieldset><legend>按需处理权限</legend>
+          <fieldset id="mcp-history-permissions"><legend>历史聊天数据读取 · 可选，需要先导入</legend>
+            <label><input id="mcp-qq" type="checkbox">允许读取 QQ 历史聊天数据</label><label><input id="mcp-wechat" type="checkbox">允许读取微信历史聊天数据</label>
+            <p class="mcp-muted">不勾选这两项，就不会向此连接开放历史搜索、统计、消息正文及历史附件。</p>
             <label><input id="mcp-media" type="checkbox">向外部 Agent 提供图片（最多 60 次/小时）</label>
             <label><input id="mcp-prepare" type="checkbox">下载原文件 / 按需提取文字（合计最多 12 次/小时，每个 32 MiB）</label>
             <label><input id="mcp-voice" type="checkbox">本地转写语音（最多 12 次/小时）</label>
-            <label><input id="mcp-onebot" type="checkbox">读取 OneBot 群公告、精华、当前成员和文件目录</label>
+            <label><input id="mcp-onebot" type="checkbox">补充历史会话的当前群公告、精华、成员和文件目录（需 OneBot）</label>
+          </fieldset>
+          <fieldset id="mcp-realtime-permissions"><legend>实时 QQ 与持续水群 · 无需导入聊天数据</legend>
+            <p class="mcp-muted">使用 SnowLuma / OneBot 当前登录的 QQ 和实时消息。只在 Agent 对话中开始聊天；下面选择允许使用的群或好友。</p>
             <label><input id="mcp-send" type="checkbox">允许直接发送 QQ 消息（无需逐次审批）</label>
             <label><input id="mcp-chat" type="checkbox">允许外部 Agent 持续聊天（群聊 / 好友私聊，需发送权限，可随时停止）</label>
             <label><input id="mcp-chat_reactions" type="checkbox" disabled>允许对已读群消息添加 / 撤销小表情回应（无需逐次审批）</label>
@@ -36,7 +36,20 @@
               <small class="mcp-muted">先开启持续群聊，再选择所需权限。看图由外部模型完成，不调用 Tulpa 模型；每小时最多看图 60 次、收藏 12 次，每张 6 MiB。发送每分钟最多 12 次；停止群聊也会停止表情操作。</small>
             </fieldset>
             <label><input id="mcp-manage" type="checkbox">允许直接执行 QQ 群管理（无需逐次审批）</label>
-          </fieldset><p class="mcp-muted">普通消息查询可连续分页，没有任务消息总量上限。文件和语音处理仅生成本地缓存。OneBot 须已有有效配置；群信息和成员是查询当时的状态，不能还原历史。权限修改请撤销旧连接后新建。</p>
+          </fieldset>
+          <fieldset id="mcp-bilibili-permissions"><legend>B站视频 · 无需导入聊天数据</legend>
+            <label><input id="mcp-bilibili_read" type="checkbox">允许 B站只读：搜索、推荐、视频内容、真实画面和评论</label>
+            <label><input id="mcp-bilibili_share" type="checkbox" disabled>允许向下方授权 QQ 群分享 B站原生视频卡片</label>
+            <small class="mcp-warning">当前 SnowLuma 2.1.1 的原生卡片实测提示小程序已下架；无法核验的卡片会阻止发送。B站只读功能不受影响。</small>
+            <p class="mcp-muted">沿用这一份 MCP 连接。没有 B站点赞、投币、收藏、评论或私聊操作；视频分享不自动获得水群或普通消息发送权限。</p>
+            <a href="/bilibili" target="_blank" rel="noopener">管理 B站扫码登录与媒体设置</a>
+          </fieldset>
+          <fieldset id="mcp-scope-picker"><legend>授权会话范围</legend>
+            <label class="mcp-all"><input id="mcp-all" type="checkbox">允许已勾选功能访问所选平台全部会话（包括之后出现的会话）</label>
+            <div id="mcp-picker"><label for="mcp-source">会话来源</label><select id="mcp-source"><option value="history">已导入的历史会话</option><option value="groups">QQ 当前群聊 · 无需导入</option><option value="friends">QQ 当前好友私聊 · 无需导入</option></select><label for="mcp-search">选择会话</label><input id="mcp-search" type="search" placeholder="搜索名称或号码"><div id="mcp-chats" class="mcp-chats"></div><button id="mcp-more" type="button" hidden>更多会话</button><p id="mcp-selection" class="mcp-muted">已选择 0 个会话</p></div>
+          </fieldset>
+          <details id="mcp-date-scope"><summary>可选：限定聊天授权日期</summary><div class="mcp-dates"><label>开始日期<input id="mcp-start" type="date"></label><label>截止日期<input id="mcp-end" type="date"></label></div><small class="mcp-muted">日期同时限制历史读取与实时操作；留空表示不限制，截止日期包含当天。</small></details>
+          <p class="mcp-muted">历史与实时权限分别生效，既有连接不会自动增加权限。更改读取平台或会话范围时，请创建新连接。</p>
           <p id="mcp-create-status" class="mcp-muted" role="status" aria-live="polite"></p>
           <button id="mcp-create" type="submit" aria-describedby="mcp-create-status">创建连接凭据</button>
           <button id="mcp-edit-port" type="button" hidden>修改服务端口</button>
@@ -91,16 +104,16 @@
   async function refresh() {
     serviceState(await api(''));
     const counts=current.data_platforms||{};
-    if(!platformsInitialized&&Object.keys(counts).length){for(const p of ['qq','wechat'])$('mcp-'+p).checked=!!counts[p];platformsInitialized=true;}
+    if(!platformsInitialized){historyPermissions();$('mcp-scope-picker').hidden=$('mcp-date-scope').hidden=!scopePlatforms().length;platformsInitialized=true;}
     $('mcp-data-status').textContent=Object.keys(counts).length?Object.entries(counts).map(([p,n])=>(p==='qq'?'QQ':'微信')+' '+n.toLocaleString()+' 条本地消息').join(' · '):'历史查询需要导入资料；实时聊天可配置 OneBot 后直接选择群或好友、授权，无需导入。';
     $('mcp-onebot-status').textContent=current.onebot_configured?'已保存 OneBot 配置；点击检测确认服务在线。':'OneBot 未配置，本地聊天查询仍可使用。公告、精华及群文件可稍后接入。';
     $('mcp-connections').replaceChildren();
     for (const row of current.connections) {
       const card=node('div','', 'mcp-connection'); card.append(node('strong',row.name+(row.revoked?' · 已撤销':'')));
       const scope=row.scope;
-      card.append(node('p',scope.platforms.join(' / ')+' · '+(scope.conversations.length?scope.conversations.length+' 个指定会话':'全部会话')+' · '+(scope.start||'不限起点')+' 至 '+(scope.end||'包括未来消息'), 'mcp-muted'));
-      card.append(node('p','操作权限：'+[scope.send?'QQ 直接发送':'',scope.chat?'持续群聊':'',scope.chat_reactions?'消息表情回应':'',scope.chat_images?'群聊看图与收藏目录':'',scope.chat_sticker_send?'发送表情':'',scope.chat_sticker_collect?'收藏到 QQ':'',scope.manage?'群管理直接操作':''].filter(Boolean).join('、')+(scope.send||scope.manage?' · 持续授权，可撤销':'仅资料读取'),'mcp-muted'));
-      card.append(node('p','来源账号：'+Object.entries(row.accounts).map(([p,id])=>p+' '+(id||'当前导入资料')).join(' / ')+' · '+row.calls+' 次调用', 'mcp-muted'));
+      card.append(node('p','历史数据：'+((scope.history_platforms||scope.platforms).join(' / ')||'未授权')+' · '+(scope.conversations.length?scope.conversations.length+' 个指定会话':scope.platforms.length?'全部会话':'无需聊天范围')+' · '+(scope.start||'不限起点')+' 至 '+(scope.end||'包括未来消息'), 'mcp-muted'));
+      card.append(node('p','操作权限：'+[scope.send?'QQ 直接发送':'',scope.chat?'持续群聊':'',scope.chat_reactions?'消息表情回应':'',scope.chat_images?'群聊看图与收藏目录':'',scope.chat_sticker_send?'发送表情':'',scope.chat_sticker_collect?'收藏到 QQ':'',scope.manage?'群管理直接操作':'',scope.bilibili_read?'B站只读':'',scope.bilibili_share?'B站原生分享':''].filter(Boolean).join('、')+(scope.send||scope.manage||scope.bilibili_share?' · 持续授权，可撤销':''),'mcp-muted'));
+      card.append(node('p','历史账号：'+(Object.entries(row.accounts).map(([p,id])=>p+' '+(id||'当前导入资料')).join(' / ')||'无需导入')+(scope.chat_account?' · 实时 QQ '+scope.chat_account:'')+' · '+row.calls+' 次调用', 'mcp-muted'));
       if(row.valid===false&&!row.revoked)card.append(node('p','来源账号已改变，请撤销并重新创建连接。','mcp-warning'));
       if(!row.revoked){const button=node('button','撤销连接');button.type='button';button.onclick=()=>action(async()=>{await api('/connections/'+encodeURIComponent(row.id)+'/revoke','POST',{});await refresh();});card.append(button);}
       $('mcp-connections').append(card);
@@ -109,15 +122,21 @@
     $('mcp-audit').replaceChildren(...current.recent.map(row=>node('p',new Date(row.at*1000).toLocaleString()+' · '+row.name+' · '+row.tool+' · '+row.status+' · '+row.seconds+' 秒 · '+row.messages+' 条消息','mcp-muted')));
   }
   function selection(){ $('mcp-selection').textContent='已选择 '+selected.size+' 个会话（搜索不会清除已选）'; }
+  function historyPlatforms(){return ['qq','wechat'].filter(p=>$('mcp-'+p).checked);}
+  function hasLive(){return ['send','manage','chat','bilibili_share'].some(p=>$('mcp-'+p).checked);}
+  function scopePlatforms(){return [...new Set([...historyPlatforms(),...(hasLive()?['qq']:[])])];}
+  function historyPermissions(){$('mcp-bilibili_share').disabled=!$('mcp-bilibili_read').checked;if($('mcp-bilibili_share').disabled)$('mcp-bilibili_share').checked=false;const enabled=historyPlatforms().length>0;for(const f of ['media','prepare','voice','onebot']){$('mcp-'+f).disabled=!enabled;if(!enabled)$('mcp-'+f).checked=false;}}
+  function scopeChanged(){historyPermissions();liveConversations=null;const platforms=scopePlatforms();$('mcp-scope-picker').hidden=$('mcp-date-scope').hidden=!platforms.length;for(const [key,pair] of selected)if(!platforms.includes(pair[0]))selected.delete(key);action(()=>chats());}
   async function chats(reset=true) {
     const version=++searchVersion;if(reset){page=0;$('mcp-chats').replaceChildren();}
-    const platforms=['qq','wechat'].filter(p=>$('mcp-'+p).checked);
-    for(const option of $('mcp-source').options)if(option.value!=='history')option.disabled=!$('mcp-qq').checked;
-    if(!$('mcp-qq').checked&&$('mcp-source').value!=='history'){$('mcp-source').value='history';liveConversations=null;}
-    if(!platforms.length){$('mcp-chats').append(node('p','请先选择允许访问的平台。','mcp-muted'));$('mcp-more').hidden=true;selection();return;}
+    const platforms=scopePlatforms(),history=historyPlatforms();
+    for(const option of $('mcp-source').options)option.disabled=option.value==='history'?!history.length:!hasLive();
+    if(!history.length&&hasLive()&&$('mcp-source').value==='history')$('mcp-source').value='groups';
+    if(!hasLive()&&$('mcp-source').value!=='history'){$('mcp-source').value='history';liveConversations=null;}
+    if(!platforms.length){$('mcp-chats').append(node('p','先选择历史读取或实时 QQ 功能。仅水群无需勾选历史数据。','mcp-muted'));$('mcp-more').hidden=true;selection();return;}
     const source=$('mcp-source').value,query=$('mcp-search').value.toLowerCase();
     let data;
-    if(source==='history')data=await api('/conversations?'+new URLSearchParams({query,offset:page,platform:platforms.length===1?platforms[0]:''}));
+    if(source==='history')data=await api('/conversations?'+new URLSearchParams({query,offset:page,platform:history.length===1?history[0]:''}));
     else{
       const items=liveConversations||(await api('/live-'+source)).items;if(version!==searchVersion)return;
       liveConversations=items;
@@ -128,7 +147,7 @@
     data.items=data.items.filter(item=>platforms.includes(item.platform));
     for(const item of data.items){const pair=[item.platform,item.conversation_id],key=JSON.stringify(pair);const label=node('label','');
       const input=document.createElement('input');input.type='checkbox';input.checked=selected.has(key);
-      input.disabled=!$(item.platform==='qq'?'mcp-qq':'mcp-wechat').checked;
+      input.disabled=!platforms.includes(item.platform);
       input.onchange=()=>{if(input.checked)selected.set(key,pair);else selected.delete(key);selection();};
       const detail=source==='history'?item.count+' 条历史消息':item.conversation_id.split(':').pop();
       label.append(input,node('span',item.platform+' · '+item.name+' ('+detail+')'));$('mcp-chats').append(label);}
@@ -254,8 +273,10 @@
     $('mcp-chat_images').disabled=!active;if(!active)$('mcp-chat_images').checked=false;
     for(const flag of ['chat_sticker_send','chat_sticker_collect']){const input=$('mcp-'+flag);input.disabled=!active||!$('mcp-chat_images').checked;if(input.disabled)input.checked=false;}
   }
-  $('mcp-chat').onchange=()=>{if($('mcp-chat').checked)$('mcp-send').checked=true;mediaPermissions();};
-  $('mcp-send').onchange=()=>{if(!$('mcp-send').checked)$('mcp-chat').checked=false;mediaPermissions();};
+  $('mcp-chat').onchange=()=>{if($('mcp-chat').checked)$('mcp-send').checked=true;mediaPermissions();scopeChanged();};
+  $('mcp-send').onchange=()=>{if(!$('mcp-send').checked)$('mcp-chat').checked=false;mediaPermissions();scopeChanged();};
+  $('mcp-manage').onchange=scopeChanged;
+  for(const f of ['bilibili_read','bilibili_share'])$('mcp-'+f).onchange=scopeChanged;
   $('mcp-chat_images').onchange=mediaPermissions;
   $('mcp-save-service').onclick=()=>action(async()=>{
     if(busy)return;busy=true;createError='';renderService();
@@ -269,20 +290,20 @@
   $('mcp-background').onchange=()=>action(()=>desktop('preferences','PUT',{background:$('mcp-background').checked}));
   $('mcp-more').onclick=()=>action(()=>chats(false));
   $('mcp-search').oninput=()=>{clearTimeout(searchTimer);searchTimer=setTimeout(()=>action(()=>chats()),200);};
-  for(const p of ['qq','wechat'])$('mcp-'+p).onchange=()=>{liveConversations=null;for(const [key,pair] of selected)if(pair[0]===p&&!$('mcp-'+p).checked)selected.delete(key);action(()=>chats());};
+  for(const p of ['qq','wechat'])$('mcp-'+p).onchange=scopeChanged;
   $('mcp-all').onchange=()=>{$('mcp-picker').hidden=$('mcp-all').checked;};
   $('mcp-create-form').onsubmit=e=>{e.preventDefault();action(async()=>{
     if(busy)return;
     // Only the explicitly labelled start action may enable a stopped service.
     const allowStart=current&&!current.running,port=Number($('mcp-port').value);
     busy=true;createError='';renderService();
-    try{const body={name:$('mcp-name').value,platforms:['qq','wechat'].filter(p=>$('mcp-'+p).checked),conversations:[...selected.values()],all_conversations:$('mcp-all').checked,start:$('mcp-start').value,end:$('mcp-end').value};
-      for(const flag of ['media','prepare','voice','onebot','send','manage','chat','chat_reactions','chat_images','chat_sticker_send','chat_sticker_collect'])body[flag]=$('mcp-'+flag).checked;
-      if(!body.platforms.length)throw Error('请选择允许访问的平台。');
-      if(!body.all_conversations&&!body.conversations.length)throw Error('请选择会话，或明确勾选允许所选平台全部会话。');
+    try{const body={name:$('mcp-name').value,platforms:scopePlatforms(),history_platforms:historyPlatforms(),conversations:[...selected.values()],all_conversations:$('mcp-all').checked,start:$('mcp-start').value,end:$('mcp-end').value};
+      for(const flag of ['media','prepare','voice','onebot','send','manage','chat','chat_reactions','chat_images','chat_sticker_send','chat_sticker_collect','bilibili_read','bilibili_share'])body[flag]=$('mcp-'+flag).checked;
+      if(!body.platforms.length&&!body.bilibili_read)throw Error('请选择历史读取、实时 QQ 或 B站只读功能。');
+      if(body.platforms.length&&!body.all_conversations&&!body.conversations.length)throw Error('请选择会话，或明确勾选允许所选平台全部会话。');
       if(body.start&&body.end&&body.start>body.end)throw Error('截止日期不能早于开始日期。');
       const latest=await api('');serviceState(latest);
-      if(body.platforms.some(p=>!latest.data_platforms?.[p]&&!(p==='qq'&&body.chat&&body.send)))throw Error('请先导入所选平台的聊天；QQ 持续聊天可直接通过 OneBot 授权群或好友。');
+      if(body.history_platforms.some(p=>!latest.data_platforms?.[p]))throw Error('所选历史数据平台尚未导入。如果只需实时水群，请取消上方历史数据授权，直接选择当前 QQ 群或好友。');
       if(!current.running){
         if(!allowStart)throw Error('本机 MCP 服务尚未运行。请点击「开启服务并创建连接」继续。');
         if(!Number.isInteger(port)||port<1024||port>65535)throw Error('服务端口应为 1024 至 65535 的整数。');
@@ -308,7 +329,7 @@
     if(!valid){$('mcp-config').value='';return false;}
     const body=credential.scope;
     $('mcp-config').value='[mcp_servers.'+serverName+']\nurl = '+JSON.stringify(credential.url)+'\nhttp_headers = { Authorization = '+JSON.stringify('Bearer '+credential.token)+' }\ntool_timeout_sec = 240\n';
-    for(const [flag,tool] of [['send','send_qq_message'],['manage','manage_qq_group']])if(body[flag])$('mcp-config').value+='\n[mcp_servers.'+serverName+'.tools.'+tool+']\napproval_mode = \"approve\"\n';
+    for(const [flag,tool] of [['send','send_qq_message'],['manage','manage_qq_group'],['bilibili_share','share_video_to_qq_group']])if(body[flag])$('mcp-config').value+='\n[mcp_servers.'+serverName+'.tools.'+tool+']\napproval_mode = \"approve\"\n';
     if(body.chat)for(const tool of ['start_chat_session','get_chat_session','list_chat_sessions','wait_chat_messages','plan_chat_reply','send_chat_reply','send_chat_message','stop_chat_session','list_chat_groups','list_chat_personas','get_chat_learning','claim_chat_learning','submit_chat_learning','select_chat_expressions'])$('mcp-config').value+='\n[mcp_servers.'+serverName+'.tools.'+tool+']\napproval_mode = "approve"\n';
     for(const [flag,names] of [['chat_reactions',['react_to_chat_message']],['chat_images',['read_chat_image','list_chat_stickers','read_chat_sticker','note_chat_sticker']],['chat_sticker_send',['send_chat_sticker']],['chat_sticker_collect',['collect_chat_sticker']]])if(body[flag])for(const tool of names)$('mcp-config').value+='\n[mcp_servers.'+serverName+'.tools.'+tool+']\napproval_mode = "approve"\n';
     return true;

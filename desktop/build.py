@@ -90,7 +90,7 @@ def build(no_zip=False,qa=False,output=None,lite=False,bundle_snowluma=False):
         from lite_dependencies import copy_dependencies
         lite_deps=copy_dependencies(ROOT,copy)
     else:tree(site,'runtime/Lib/site-packages',lambda p:p.parts[0]=='pip' or p.parts[0].startswith('pip-') or p.name in ('direct_url.json',))
-    for name in (('chatlocal','web') if lite else ('chatlocal','web','harness')):tree(ROOT/name,name)
+    for name in (('chatlocal','web','tulpa_bilibili') if lite else ('chatlocal','web','harness')):tree(ROOT/name,name)
     if bundle_snowluma:
         # Include only the verified, uninitialized official archive. Never copy
         # a user's live runtime/config, and never execute it while building.
@@ -125,6 +125,9 @@ def build(no_zip=False,qa=False,output=None,lite=False,bundle_snowluma=False):
     subprocess.run([sys.executable,str(ROOT/'scripts/check_live_runtime.py'),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_qq_labels.py'),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp.py'),'--package',str(out)],check=True)
+    if lite:
+        subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_bilibili.py'),'--package',str(out)],check=True)
+        subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_history_optional.py'),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_onebot.py'),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_actions.py'),'--package',str(out)],check=True)
     subprocess.run([str(out/'runtime/python.exe'),str(ROOT/'scripts/check_mcp_chat.py'),'--package',str(out)],check=True)
@@ -196,7 +199,7 @@ def build(no_zip=False,qa=False,output=None,lite=False,bundle_snowluma=False):
     copy(ROOT/'desktop/ChatWeave.exe.config',executable+'.config')
     write('开始使用.txt', 'Tulpa '+VERSION+'\n\n完整解压此文件夹，双击 Tulpa.exe。无需安装 Python、Node 或运行 PowerShell。\n\n使用外部 Agent（例如 Codex）：\n1. 首次选择「连接外部 Agent」，无需模型 API Key。\n2. 在「数据与同步」登录并选择本机 QQ / 微信账号，导入需要的聊天。\n3. 打开「外部 Agent / MCP」，选择平台、会话、日期及可选权限，点击创建连接（可一并开启服务）。\n4. 点击检测连接，确认后写入本机 Codex 配置，或复制配置到其他支持 Streamable HTTP 的客户端。\n5. 在客户端重新连接 MCP。不要把 OneBot Token 当成 MCP Token。\n\n使用内置聊天：在「模型与连接」填写自己的模型 API 地址、API Key 和模型名称。\nOneBot 可独立保存并检测；MCP 与 QQ 扩展共用这份配置。SnowLuma 可在 OneBot 设置中勾选协议后一键自动配置。\n\n勾选「关闭窗口后留在托盘」后，关闭窗口仍可提供 MCP 和实时读取。双击托盘图标打开，右键「彻底退出」停止服务；托盘菜单可选择开机启动（默认关闭）。不勾选时关闭窗口即退出。移动文件夹后请重新设置开机启动。\n数据和配置保存在本文件夹的 data、imports、.env 等位置。升级请先彻底退出并备份，保留个人数据；不要同时运行两个指向同一数据目录的版本。\n请放在有写入权限的本地目录，不要直接从 ZIP 内运行。Windows 10/11 x64，.NET Framework 4.8。\n本程序未签名。源码：https://github.com/fumingyang2004/Tulpa 。第三方许可见 doc/THIRD_PARTY.md，教程见 doc/MCP.md。\n')
     if lite:
-        write('开始使用.txt', 'Tulpa MCP '+VERSION+'\n\n完整解压后双击 Tulpa.exe。此版只提供本机资料服务与 MCP，不含内置模型、Gradio 或 DeepSeek Harness。\n1. 在数据与同步导入 QQ / 微信资料，可开启实时读取。\n2. 在连接外部 Agent 选择范围并创建凭据，连接 Codex、DeepSeek Harness 等 Streamable HTTP 客户端。\n3. OneBot 设置与完整版本相同。发送、群管理默认关闭；勾选对应权限后 Agent 可直接执行，无需逐次审批。可撤销连接，操作记录留在本机。\n4. Windows 10/11 x64，需要系统 Microsoft Edge WebView2 Evergreen Runtime。多数系统已安装；缺少时安装微软官方运行时：https://developer.microsoft.com/microsoft-edge/webview2/ 。\n5. 主包不带语音模型，首页可一键下载约 181 MB，安装后离线转写。Office 原文件通过 download_file 下载后交给外部 Agent；不附带 Office 解析框架或本地 OCR。\n6. 此压缩包不含任何聊天或凭据。数据与完整版本各自独立；不要同时打开两个指向同一数据目录的版本。\n教程：doc/MCP_LITE.md。\n')
+        write('开始使用.txt', 'Tulpa MCP '+VERSION+'\n\n完整解压后双击 Tulpa.exe。此版只提供本机资料服务与 MCP，不含内置模型、Gradio 或 DeepSeek Harness。\n1. 按用途选择：只用实时 QQ / 水群或 B站，无需导入聊天。需要查询旧聊天时才在数据与同步导入 QQ / 微信资料。\n2. 在连接外部 Agent 分别勾选历史读取、实时 QQ 和 B站能力，选择范围并创建同一份凭据，连接 Codex、DeepSeek Harness 等 Streamable HTTP 客户端。\n3. OneBot 设置用于连接当前 QQ。发送、群管理默认关闭；勾选对应权限后 Agent 可直接执行，无需逐次审批。可撤销连接，操作记录留在本机。\n4. Windows 10/11 x64，需要系统 Microsoft Edge WebView2 Evergreen Runtime。多数系统已安装；缺少时安装微软官方运行时：https://developer.microsoft.com/microsoft-edge/webview2/ 。\n5. 主包不带语音模型，首页可一键下载约 181 MB，安装后离线转写。Office 原文件通过 download_file 下载后交给外部 Agent；不附带 Office 解析框架或本地 OCR。\n6. 此压缩包不含任何聊天或凭据。保留本安装内的人格、授权和学习库；不要同时打开两个指向同一数据目录的版本。\n教程：doc/MCP_LITE.md；B站功能与当前卡片限制：doc/BILIBILI_MCP.md。\n')
     with (out/'开始使用.txt').open('a',encoding='utf-8') as guide:
         guide.write('\nSnowLuma 自动配置：在“连接外部 Agent → 连接 QQ”勾选使用细则与自动配置授权，点击“一键配置”。Tulpa 校验随包运行文件或自动从官方渠道下载固定版本，然后自动配置端口、密码和 Token。只有多个 QQ 进程或尚未登录时需要选择账号或扫码。已有独立服务可从高级选项导入，完整步骤、取消与恢复说明见 doc/SNOWLUMA_MANAGED.md。\n')
         guide.write('\n从旧版本升级：先看 doc/UPGRADE.md。可将该文档交给 Codex 或 DeepSeek Harness，使用新版 scripts/upgrade_installation.py 更新原安装目录，自动保留聊天、附件、MCP 授权和实时进度，无需重新导入。升级前从托盘彻底退出 Tulpa。\n持续群聊和表情包仅向 MCP 开放：OneBot HTTP + 正向 WebSocket，按连接分别授权；完整步骤见 doc/MCP.md。\n')

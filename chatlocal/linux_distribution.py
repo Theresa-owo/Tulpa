@@ -17,6 +17,7 @@ DOCUMENTS = frozenset({
     'DOCKER_MANAGED_PLAN.md', 'LINUX_ACCEPTANCE.md', 'LINUX_TERMINAL.md',
     'SECURITY.md', 'TERMINAL_API.md', 'LINUX_THIRD_PARTY.md', 'LINUX_UPGRADE.md', 'SL_TOOLS.md',
     'assets/title.png',
+    'BILIBILI_MCP.md',
 })
 REQUIREMENTS = frozenset({
     'linux.txt', 'linux-full.txt', 'linux-readers.txt', 'linux-ocr.txt',
@@ -36,6 +37,7 @@ EXCLUDED_SCRIPTS = frozenset({
 })
 SOURCE_SUFFIXES = {
     'chatlocal': {'.py', '.md', '.json', '.txt', '.html', '.css', '.tcss', '.js'},
+    'tulpa_bilibili': {'.py', '.md', '.json', '.txt', '.html', '.css', '.js', ''},
     'web': {'.html', '.css', '.js', '.png', '.svg'},
     'harness': {'.mjs'},
     'scripts': {'.py', '.mjs'},
