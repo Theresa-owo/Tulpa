@@ -552,7 +552,10 @@ def main():
             (folder/'.env').write_text(f'REPLY_ONEBOT_URL=http://127.0.0.1:{upstream.server_port}\nREPLY_ONEBOT_WS_URL=ws://127.0.0.1:{events.port}\nREPLY_ONEBOT_WS_TOKEN=event-fixture\n','utf-8')
             cache=folder/'trusted';cache.mkdir()
             (folder/'mcp-chat-media-policy.json').write_text(json.dumps(dict(local_roots={'111':[str(cache)]})),'utf-8')
-            (folder/'mcp-chat-policy.json').write_text(json.dumps(dict(quiet_seconds=.1,reply_cooldown_seconds=0)),'utf-8')
+            # The six-resource nested fixture checks completeness, not latency.
+            # Fresh Windows HTTP/TLS clients can exhaust the production 3 s
+            # budget; deadline exhaustion is tested explicitly below.
+            (folder/'mcp-chat-policy.json').write_text(json.dumps(dict(quiet_seconds=.1,reply_cooldown_seconds=0,detail_budget_seconds=10)),'utf-8')
             with patch('chatlocal.onebot.ROOT',folder),patch('chatlocal.message_sender.ROOT',folder):
                 app=FastAPI();service=install_mcp_routes(app,store);access=service.access;tools=service.tools
                 with TestClient(app):
