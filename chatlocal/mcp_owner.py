@@ -30,7 +30,10 @@ def protected(name, args):
         return bool(args.get('mention_all'))
     if name == 'send_chat_reply':
         bubbles=args.get('bubbles',[])
-        return isinstance(bubbles,list) and any(isinstance(b,dict) and (b.get('mention_all') or b.get('kind') in ('file','qq_action')) for b in bubbles)
+        return isinstance(bubbles,list) and any(isinstance(b,dict) and (
+            b.get('mention_all') or b.get('kind')=='file' or (b.get('kind')=='qq_action' and not (
+                b.get('tool')=='qq_interact' and b.get('action')=='send_poke'))
+        ) for b in bubbles)
     return False
 
 
@@ -41,7 +44,9 @@ def add_proof_schema(rows):
                 owner_session_id=dict(type='string',minLength=32,maxLength=32,description='启用主人校验时，主人原始文字请求所在的本连接会话；不要求前缀。'),
                 owner_event_id=dict(type='integer',minimum=1,description='主人原始指令的已读取事件 ID；不是昵称、QQ 消息编号或引用事件。'),
                 owner_command_sha256=dict(type='string',pattern='^[0-9a-f]{64}$',description='read_owner_command 返回的原文摘要；自然语言指令必须原样携带，防止读取后指令变化。'))
-            row['description'] += ' 启用主人校验时先 read_owner_command 核验主人原文，再按其自然语言要求选工具和参数并携带来源证据；主人无需 JSON，/tulpa 前缀可选。'
+            row['description'] += ' 受控操作启用主人校验时先 read_owner_command 核验主人原文，再按其自然语言要求选工具和参数并携带来源证据；主人无需 JSON，/tulpa 前缀可选。'
+            if row['name']=='send_chat_reply':
+                row['description'] += ' 普通聊天及 qq_interact/send_poke 主动拍或自然回拍不要求主人文字凭据；拍一拍仍需连接授权、Planner、成员核验和发送队列。混入文件、@全体或其他 QQ 动作仍严格校验主人。'
     return rows
 
 

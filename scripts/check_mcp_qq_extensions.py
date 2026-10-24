@@ -296,6 +296,13 @@ def main():
                         db.execute('UPDATE grants SET scope=?,revision=revision+1 WHERE id=?',
                             (json.dumps(dict(scope,qq_interactions=False,chat_poke=True)),g['id']))
                     assert call('qq_interact',action='send_like',conversation_id='111:group:223',params={'user_id':'333','times':1},idempotency_key='poke-only-denied-like').isError
+                    from chatlocal.mcp_owner import OwnerGate
+                    owner=OwnerGate(access)
+                    owner.configure(g['id'],dict(enabled=True,owner_qq='33333',expected_revision=0))
+                    # No owner text/proof: both a proactive tap and a natural
+                    # tap-back must still traverse real MCP -> Planner -> HTTP.
+                    r,proactive=send(sid,dict(kind='qq_action',tool='qq_interact',action='send_poke',params={'user_id':'333'}))
+                    assert r['state']=='SUCCEEDED',r
                     tools.chat.receive(tap)
                     context=data('get_chat_session',session_id=sid)
                     tapped=next(m for m in context['context']['messages'] if m.get('notice',{}).get('type')=='poke')
@@ -312,6 +319,11 @@ def main():
                     assert data('send_chat_reply',**reply)['state']=='SUCCEEDED' and len(Bot.writes)==count
                     tools.chat.receive(dict(tap,user_id=111,target_id=333))
                     assert len(Bot.writes)==count,'Own tap echo caused an automatic reply'
+                    controlled=dict(reply,plan_id='f'*32,bubbles=[reply['bubbles'][0],dict(kind='file',asset_id='f'*32)])
+                    denied_reply=call('send_chat_reply',**controlled)
+                    assert denied_reply.structuredContent['error_code']=='owner_required'
+                    assert len(Bot.writes)==count,'Mixed controlled queue partially dispatched a poke'
+                    owner.configure(g['id'],dict(enabled=False,owner_qq='33333',expected_revision=1))
                     Bot.history[9010]=dict(Bot.history[9001],group_id=223,message_id=9010)
                     Bot.history[9011]=dict(Bot.history[9001],group_id=999,message_id=9011)
                     # Destination 223 is idle; source 222 is authorized and current.

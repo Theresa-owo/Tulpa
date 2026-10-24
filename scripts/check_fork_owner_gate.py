@@ -233,5 +233,23 @@ class OwnerTests(unittest.TestCase):
         self.assertIn('read_owner_command',{row['name'] for row in rows})
         self.assertNotIn('owner_qq',schema['parameters']['properties'])
 
+    def test_poke_only_bubbles_bypass_owner_gate_but_not_other_controls(self):
+        poke=dict(kind='qq_action',tool='qq_interact',action='send_poke',params={'user_id':'55555'})
+        args=dict(session_id=self.sid,plan_id='b'*32,expression_ids=[],bubbles=[poke])
+        # This test isolates the owner gate. The real Planner/member/permission
+        # dispatch is exercised in check_mcp_qq_extensions with owner enabled.
+        for bubbles in ([poke],[dict(kind='text',text='？'),poke],[poke,copy.deepcopy(poke)]):
+            with patch.object(self.tools,'_call',return_value='normal interaction') as dispatch:
+                self.assertEqual(self.tools.call(self.token,'send_chat_reply',dict(args,bubbles=bubbles),threading.Event()),'normal interaction')
+                dispatch.assert_called_once()
+        controls=[dict(kind='file',asset_id='c'*32),dict(kind='text',text='x',mention_all=True),
+            dict(poke,action='send_like'),dict(poke,action='set_group_sign'),dict(poke,tool='qq_message_action'),
+            dict(kind='qq_action'),dict(poke,action='send_poke_typo')]
+        for control in controls:
+            for bubbles in ([control],[poke,control],[control,poke]):
+                with patch.object(self.tools,'_call',side_effect=AssertionError('controlled dispatch reached')):
+                    result=self.tools.call(self.token,'send_chat_reply',dict(args,bubbles=bubbles),threading.Event())
+                self.assertEqual(result.structuredContent['error_code'],'owner_required')
+
 
 if __name__=='__main__':unittest.main()
