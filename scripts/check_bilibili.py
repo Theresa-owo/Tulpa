@@ -313,7 +313,7 @@ class Fixtures(unittest.TestCase):
                 while self.service.store.job(key)['state'] in ('queued','running') and time.monotonic()<until:time.sleep(.05)
                 self.assertEqual(self.service.store.job(key)['state'],'cancelled')
             # New share grants bind the live identity, do not grant chat or history.
-            with patch('chatlocal.onebot.Client.login',return_value='10001'):
+            with patch('chatlocal.onebot.Client',return_value=SimpleNamespace(login=lambda:'10001')):
                 permit=mcp.access.create(body|dict(platforms=['qq'],bilibili_share=True,all_conversations=True))
             args=dict(qq_account='10001',group_id='20001',bvid=BV,idempotency_key='unified-send')
             r=call(permit['token'],'share_video_to_qq_group',args)
