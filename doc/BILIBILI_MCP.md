@@ -63,9 +63,11 @@ QQ 侧仅允许读取登录/群列表/版本、`get_mini_app_ark` 与必要的 `
 
 ## 验证和回退
 
-```powershell
-.venv\Scripts\python.exe scripts/check_bilibili.py
-.venv\Scripts\python.exe scripts/check_mcp_history_optional.py
+激活当前平台的 Tulpa 虚拟环境后运行：
+
+```sh
+python scripts/check_bilibili.py
+python scripts/check_mcp_history_optional.py
 ```
 
 这些测试只用合成媒体、假 OneBot 和本地 MCP 服务，不访问真实 QQ/B站。包含统一授权、空历史、任务隔离与撤权、SSRF、分页、分 P、缓存、限额/取消、ASR 时间、分享去重/UNKNOWN、已知坏卡片拒绝、旧工具兼容。打包检查使用 `--package <Tulpa目录>`。
@@ -74,4 +76,4 @@ Windows 真实验收：经用户批准扫码；从「AI 水群」搜索挑选视
 
 恢复旧程序时先退出 Tulpa，从本机升级备份恢复程序；不要覆盖测试后新生成的数据。既有人格、学习库、账号及连接不迁移或清空。B站数据单独存储，旧程序忽略它；不需重新导入聊天。测试账号凭据不会自动复制给新安装，正式使用需在该安装里扫码。
 
-依赖锁定及许可见 [第三方组件](THIRD_PARTY.md) 和 `tulpa_bilibili/_vendor/NOTICE.md`。
+内容组件的版本、来源及许可见 [B站组件来源](../tulpa_bilibili/_vendor/NOTICE.md)。

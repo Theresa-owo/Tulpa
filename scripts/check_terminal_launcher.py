@@ -29,7 +29,10 @@ class LauncherTests(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory(prefix='terminal-launch with spaces ', dir=ROOT / '.tmp')
         self.root = Path(self.tmp.name)
-        shutil.copytree(ROOT / 'chatlocal', self.root / 'chatlocal', ignore=shutil.ignore_patterns('__pycache__'))
+        # The unified MCP backend imports both packages, even when this empty
+        # fixture grants no Bilibili tools. Keep its installation self-contained.
+        for package in ('chatlocal', 'tulpa_bilibili'):
+            shutil.copytree(ROOT / package, self.root / package, ignore=shutil.ignore_patterns('__pycache__'))
         shutil.copytree(ROOT / 'requirements', self.root / 'requirements')
         for name in ('tulpa', 'setup-linux.sh'):
             shutil.copy2(ROOT / name, self.root / name)
@@ -60,7 +63,11 @@ class LauncherTests(unittest.TestCase):
 
     def success(self, *args):
         result = self.command(*args)
-        self.assertEqual(result.returncode, 0, result.stderr)
+        details = result.stderr
+        log = self.root / '.tmp/terminal-service.log'
+        if result.returncode and log.is_file():
+            details += '\n' + log.read_text(errors='replace')[-6000:]
+        self.assertEqual(result.returncode, 0, details)
         return json.loads(result.stdout)
 
     def test_start_reuse_private_files_and_graceful_stop(self):

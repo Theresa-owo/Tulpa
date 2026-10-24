@@ -24,7 +24,7 @@ function preview(multiple,httpOnly=false){
       const page=await browser.newPage({viewport:{width:1100,height:960}}),errors=[],requests=[];
       page.on('pageerror',e=>errors.push(e.message));
       let settings={api_base:'',model:'',has_api_key:false,configured:false,sender_url:'http://127.0.0.1:19000/old',events_url:'ws://127.0.0.1:19001/old',has_sender_token:true,has_events_token:true};
-      let multiple=false,httpOnly=false,failInspect=false,failImport=false,slow=false,dropImport=false,expired=false;
+      let multiple=false,httpOnly=false,failInspect=false,failImport=false,slow=false,dropImport=false,expired=false,managedGate=null;
       let managedState={available:true,phase:'idle',phase_label:'请选择 SnowLuma 文件夹',version:'1.14.22',agreements:[],consent_fingerprint:'fixture'};
       await page.addInitScript(()=>{window.TULPA_FOLDER_PICKER=true;window.__pickerListeners=[];window.chrome={webview:{postMessage:m=>{window.__pickerRequest=m;},addEventListener:(_,fn)=>window.__pickerListeners.push(fn)}};});
       await page.route(origin+'/**',async route=>{
@@ -34,7 +34,7 @@ function preview(multiple,httpOnly=false){
         if(url.pathname.startsWith('/ui/'))return route.fulfill({contentType:url.pathname.endsWith('.js')?'text/javascript':url.pathname.endsWith('.css')?'text/css':'image/png',body:fs.readFileSync(path.join(root,'web',path.basename(url.pathname)))});
         if(url.pathname==='/api/desktop/status')return reply({settings,owned:true,storage:'fixture',version:'test'});
         if(url.pathname==='/api/desktop/preferences')return reply({mode:'mcp',background:true});
-        if(url.pathname==='/api/desktop/snowluma/managed')return reply(managedState);
+        if(url.pathname==='/api/desktop/snowluma/managed'){if(managedGate)await managedGate;return reply(managedState);}
         if(url.pathname==='/api/read-options')return reply({qq_per_chat:{min:1,max:10000,default:100},wechat_per_chat:{min:1,max:10000,default:100}});
         if(url.pathname==='/api/mcp')return reply({running:false,enabled:false,port:4200,data_platforms:{},connections:[],recent:[],onebot_configured:true});
         if(url.pathname==='/api/mcp/operations')return reply({operations:[]});
@@ -92,8 +92,13 @@ function preview(multiple,httpOnly=false){
       assert.equal(imports().length,1);assert.equal(await httpField.inputValue(),'http://127.0.0.1:4202/api');
       failInspect=false;await q('folder',prefix).evaluate(e=>{for(let p=e.parentElement;p;p=p.parentElement)if(p.tagName==='DETAILS')p.open=true;});await q('folder',prefix).fill('C:\\SnowLuma-fixture');await q('consent',prefix).check();
       // Changed server-side terms stop the pending click before any inspection/write.
+      // Hold status responses until the click has been dispatched. Otherwise
+      // the normal two-second poll can disable this button before Playwright
+      // clicks it, testing an impossible click instead of the pre-write check.
+      let releaseTerms;managedGate=new Promise(resolve=>{releaseTerms=resolve;});
       managedState={...managedState,consent_fingerprint:'changed'};const beforeTerms=requests.length;
-      await q('start',prefix).click();await has('勾选',prefix);assert.equal(await q('consent',prefix).isChecked(),false);assert.equal(requests.length,beforeTerms);
+      try{await q('start',prefix).click();}finally{releaseTerms();managedGate=null;}
+      await has('勾选',prefix);assert.equal(await q('consent',prefix).isChecked(),false);assert.equal(requests.length,beforeTerms);
       // Multiple accounts require a choice in the same flow, with shared selectors.
       multiple=true;await q('consent',prefix).check();await q('start',prefix).click();await has('多个 QQ',prefix);
       assert.equal(await q('apply',prefix).isEnabled(),false);assert.equal(imports().length,1);
