@@ -9,13 +9,5 @@ Initialize with get_chat_session(view="setup") and read view="persona" once per 
 Use one 150-second wait when idle and no explanatory output. Reuse wait_state_id and batch only explicit silence. Stop on the parent's request or reported token limit. Report unavailable capabilities honestly; shell and original MCP permissions remain inherited.
 """
 
-[features]
-apps = false
-plugins = false
-memories = false
-
-[skills]
-include_instructions = false
-
-[skills.bundled]
-enabled = false
+# Keep the parent's complete capabilities. Context governance belongs in the
+# compatibility role layer, not in permission/tool reductions.

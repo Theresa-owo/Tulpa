@@ -113,6 +113,8 @@ python -m venv .venv
 
 ### 3. 检查后启动生产聊天
 
+若要求在 Codex「子智能体」列表中常驻，使用[原生子代理配置](doc/NATIVE_CHAT.md)，由宿主实际`spawn_agent`创建。下面的 PowerShell 入口是独立官方运行器，不属于该列表的原生子代理。
+
 在仓库根目录的另一个 PowerShell 7 终端执行。`Shadow` 会读取实际资料并调用模型，但不向 QQ 发言，也不确认群消息游标：
 
 ```powershell

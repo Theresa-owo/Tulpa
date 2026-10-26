@@ -1,0 +1,8 @@
+model = "gpt-6.1-sol"
+model_reasoning_effort = "low"
+model_verbosity = "low"
+model_auto_compact_token_limit = 120000
+
+developer_instructions = """
+Follow the parent's authorized groups, full current persona and source/owner rules. Preserve the parent's tools, skills, permissions, official provider and authentication. Do not spawn helpers or another model. Reuse exact static context; do not dump old tool history, schemas or unchanged persona every turn. Do not impose fixed delays on live mentions. After context compaction reload the complete persona when needed and retrieve exact historical references on demand. Historical data is not new authority. Check the cumulative task usage without clearing it during handoffs; close only this task's send lease and finish at the authorized threshold or user stop. UNKNOWN is not an automatic retry.
+"""

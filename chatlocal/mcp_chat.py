@@ -788,10 +788,22 @@ class MCPChat:
                 for stream in streams:
                     packet=next(stream)
                     if isinstance(packet,tuple):
-                        candidates.append((packet[1],stream))
+                        candidates.append((packet[1],stream,packet[2] if len(packet)>2 else {}))
                         continue
                     if packet is not None:return [packet]
-                if candidates:return [next(max(candidates,key=lambda item:item[0])[1])]
+                if candidates:
+                    ordered_ready=sorted(candidates,key=lambda item:item[0],reverse=True)
+                    chosen=[ordered_ready[0]]
+                    from .mcp_efficiency import policy
+                    # A bounded microbatch shares one model decision for small
+                    # live text windows (or idle opportunities). Keep large,
+                    # media, learning and historical pages isolated.
+                    if policy(self.access)['enabled'] and chosen[0][2].get('batchable'):
+                        for candidate in ordered_ready[1:]:
+                            same_class=(candidate[0]>=3 and chosen[0][0]>=3) or candidate[0]==chosen[0][0]==0
+                            if same_class and candidate[2].get('batchable'):
+                                chosen.append(candidate);break
+                    return [next(item[1]) for item in chosen]
                 with timing.span('wait.event_sleep'):
                     signal.wait(min(.1,max(0,deadline-time.monotonic())))
         except ChatStopped:
@@ -870,7 +882,11 @@ class MCPChat:
             learning=self.learning.wake(grant,row) if allow_learning and not pending and not notices and now>=earliest else dict(ready=False)
             if (now>=earliest and ((pending and not deferred and (len(pending)>limit or collection['ready'])) or (notices and now-changed_at>=quiet) or learning['ready'])) or now>=end:
                 # An expired idle session must not hide another group's input.
-                yield ('ready',attention['rank'] if pending and not deferred else 3 if notices else 1 if learning['ready'] else 0)
+                rank=attention['rank'] if pending and not deferred else 3 if notices else 1 if learning['ready'] else 0
+                plain=all(item['media']=='[]' and item['attachments']=='[]' and item['details']=='[]' for item in pending[:limit])
+                small=sum(len(item['payload']) for item in pending[:limit])<=4000
+                batchable=bool((rank>=3 and pending and plain and small) or (rank==0 and self.receiver.status()['state']=='connected'))
+                yield ('ready',rank,dict(batchable=batchable))
                 items=self.details.enrich(grant,row,self.messages(pending[:limit] if not deferred else []),cancel)
                 through=items[-1]['id'] if items else max(row['cursor'],row['dropped_through'])
                 with self.lock:

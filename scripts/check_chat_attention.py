@@ -133,7 +133,21 @@ def main():
                     assert proactive['state']=='READY',proactive
                     result=chat.turns.submit(grant,dict(session_id=sids[0],plan_id=proactive['plan_id'],expression_ids=[],bubbles=[dict(kind='text',text='今天大家都在忙什么呀')]),cancel)
                     assert result['state']=='SUCCEEDED' and len(OneBot.sent)==3,result
+                    # Efficiency mode may share a model step across two small
+                    # live groups. Decisions, IDs, sends and ACKs stay separate.
+                    (root/'mcp-efficiency.json').write_text(json.dumps(dict(enabled=True)),'utf-8')
+                    left=add(2,'在吗',at=True);right=add(3,'抱抱',at=True)
+                    pair=many()['results'];assert {r['session_id'] for r in pair}=={sids[2],sids[3]}
+                    for item in pair:
+                        sent_pair=asyncio.run(fast_reply(port,g['token'],dict(session_id=item['session_id'],batch_id=item['input_batch']['id'],target_event_id=item['messages'][0]['id'],expression_ids=[],text='在呢')))
+                        assert sent_pair['result']['state']=='SUCCEEDED',sent_pair
+                    many(acknowledge_through_ids={r['session_id']:r['read_through_id'] for r in pair})
+                    assert chat.row(sids[2])['cursor']>=left and chat.row(sids[3])['cursor']>=right
+                    assert len(OneBot.sent)==5
+                    add(4,'长'*3500,at=True);add(5,'短问候',at=True)
+                    assert len(many()['results'])==1,'Large context was combined into an unbounded multi-group packet'
                     print('PASS: @ behind 1000 old messages delivered immediately; exact ACK retains holes; cache trim does not starve reply; stream replacement rejected; multi-group live priority; duplicate/reopen/UNKNOWN protection; proactive Planner and real loopback send')
+                    print('PASS: bounded two-group microbatch, separate target/send/ACK and large/media fallback')
     finally:events.close();upstream.shutdown();upstream.server_close()
 
 
