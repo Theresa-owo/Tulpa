@@ -60,7 +60,7 @@ jobs:
           New-Item -ItemType Directory -Force .tmp,data,imports | Out-Null
           python scripts/check_reader_install.py
           if ($LASTEXITCODE -ne 0) { throw 'Reader installer boundary fixture failed' }
-          python -m pip install -r requirements/readers.txt -r requirements/artifacts.txt
+          python -m pip install -r requirements/readers.txt -r requirements/artifacts.txt -r requirements/mcp.txt
           if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
           python scripts/install_readers.py
           if ($LASTEXITCODE -ne 0) { throw 'Reader installation failed' }
@@ -75,6 +75,7 @@ jobs:
           $checks += @('check_mcp_picker.py','check_image_identity.py','check_mcp_chat_enrichment.py','check_mcp_chat_output.py','check_mcp_image_reuse.py','check_reply_timing.py','check_antigravity_reply_timing.py')
           $checks += @('check_fork_mcp_parallel.py','check_fork_mcp_realtime.py','check_fork_native_files.py','check_fork_scope_edit.py','check_fork_upstream_sync.py','check_fork_permissions.py')
           $checks += @('check_fork_owner_gate.py')
+          $checks += @('check_bilibili.py','check_mcp_history_optional.py','check_mcp_connection_ui.py','check_mcp_cli.py')
           foreach ($check in $checks) {
             python "scripts/$check"
             if ($LASTEXITCODE -ne 0) { throw "$check failed" }

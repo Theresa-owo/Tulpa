@@ -6,7 +6,7 @@ Linux 的环境、终端接口、测试与源码打包见 [Linux 开发指南](L
 
 ## 目录与开发入口
 
-根目录保留 README、许可证、配置示例、`requirements.txt` 和安装、启动、停止入口。`setup.ps1`、`start.ps1`、`stop.ps1` 的用法不变。
+根目录保留 README、许可证、配置示例、基础依赖与主要运行入口。Windows 辅助脚本位于 `scripts/windows/`，从仓库根目录运行 `scripts/windows/setup.ps1`、`scripts/windows/start.ps1`、`scripts/windows/stop.ps1`；启动脚本现在进入 MCP 页面。Linux 安装入口 `setup-linux.sh` 与启动入口 `tulpa` 保持原位。Linux 教程和测试须知位于 `doc/LINUX.md`、`doc/LINUX_TESTING.txt`。
 
 - `requirements/`：读取器、MCP 轻量版、图片、文件解析和语音的分类依赖，版本与移动前相同；`readers.txt` 包含根目录的基础依赖。
 - `scripts/`：辅助脚本和检查。手动刷新数据使用 `scripts/refresh-data.ps1`；本地 OneBot 的启停辅助脚本为 `scripts/start-reply-sender.ps1` 和 `scripts/stop-reply-sender.ps1`。

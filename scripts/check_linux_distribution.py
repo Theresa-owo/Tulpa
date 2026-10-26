@@ -11,7 +11,7 @@ from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-from chatlocal.linux_distribution import QUICKSTART_NAMES, source_files
+from chatlocal.linux_distribution import QUICKSTART_NAMES, LINUX_QUICKSTART, linux_readme, source_files
 from chatlocal.linux_service import source_archive
 
 
@@ -88,6 +88,24 @@ class DistributionTests(unittest.TestCase):
                 self.assertEqual(archive.getnames(), ['Tulpa/README.md'])
                 self.assertEqual(archive.extractfile('Tulpa/README.md').read(), content)
 
+    def test_organized_guides_keep_package_root_and_repacking(self):
+        with tempfile.TemporaryDirectory(prefix='tulpa-organized-docs-') as folder:
+            root = Path(folder)
+            (root / 'doc').mkdir()
+            (root / 'README.md').write_text('Desktop source instructions')
+            (root / 'README.linux.md').write_text('Older source guide')
+            (root / 'doc/LINUX.md').write_text('Linux MCP: ./tulpa\n')
+            (root / LINUX_QUICKSTART).write_text('Check ./tulpa start\n')
+            source_archive(root / 'first.tar.gz', root)
+            with tarfile.open(root / 'first.tar.gz') as archive:
+                self.assertEqual(set(archive.getnames()), {'Tulpa/README.md', 'Tulpa/TESTING.txt'})
+                self.assertEqual(archive.extractfile('Tulpa/README.md').read(), b'Linux MCP: ./tulpa\n')
+                archive.extractall(root / 'unpacked', filter='data')
+            source_archive(root / 'second.tar.gz', root / 'unpacked/Tulpa')
+            with tarfile.open(root / 'second.tar.gz') as archive:
+                self.assertEqual(set(archive.getnames()), {'Tulpa/README.md', 'Tulpa/TESTING.txt'})
+                self.assertEqual(archive.extractfile('Tulpa/TESTING.txt').read(), b'Check ./tulpa start\n')
+
     def test_shipped_docs_links_and_linux_instructions(self):
         selected = {p.resolve() for p in source_files(ROOT)}
         docs = [p for p in selected if p.suffix == '.md' and
@@ -106,9 +124,9 @@ class DistributionTests(unittest.TestCase):
                     headings = re.findall(r'^#{1,6}\s+(.+?)\s*$', target.read_text(), re.M)
                     anchors = {re.sub(r'[^\w\- ]', '', h.lower()).replace(' ', '-') for h in headings}
                     self.assertIn(unquote(url.fragment), anchors, f'{path.name}: {link}')
-        quickstarts = sorted(name for name in QUICKSTART_NAMES if (ROOT / name).resolve() in selected)
+        quickstarts = sorted(name for name in (*QUICKSTART_NAMES, LINUX_QUICKSTART) if (ROOT / name).resolve() in selected)
         self.assertTrue(quickstarts, '发行包需要 TESTING.txt 或 看我.txt 测试说明。')
-        readme = 'README.linux.md' if ROOT / 'README.linux.md' in selected else 'README.md'
+        readme = linux_readme(ROOT).relative_to(ROOT).as_posix()
         for entry in (readme, 'doc/LINUX_TERMINAL.md', *quickstarts):
             self.assertIn('./tulpa', (ROOT / entry).read_text())
 

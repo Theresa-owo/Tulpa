@@ -13,13 +13,50 @@ from .mcp_qq_permissions import QQ_FLAGS, MEDIA_FLAGS as ATTACHMENT_FLAGS, live_
 
 CHAT_MEDIA_FLAGS = ('chat_images', 'chat_sticker_send', 'chat_sticker_collect')
 CHAT_EXTRA_FLAGS = ('chat_reactions', 'chat_file_send', 'chat_moderate')
-PERMISSION_FLAGS = ('media', 'prepare', 'voice', 'onebot', 'send', 'manage', 'chat',
+PERMISSION_FLAGS = ('media', 'prepare', 'voice', 'onebot', 'send', 'manage', 'chat', 'bilibili_read', 'bilibili_share',
                     *CHAT_MEDIA_FLAGS, *CHAT_EXTRA_FLAGS, *QQ_FLAGS)
 CHAT_MEDIA_TOOLS = ('read_chat_image','import_chat_image','list_chat_stickers','read_chat_sticker','note_chat_sticker','send_chat_sticker','collect_chat_sticker',
                     'prepare_local_image','download_chat_image','list_chat_files','download_chat_file','send_chat_file','moderate_chat_member')
 CHAT_WAIT_TOOLS = ('wait_chat_messages', 'wait_chat_messages_many')
 
+
+def history_platforms(scope):
+    # Old grants retain exactly their old history access. New grants opt in
+    # separately; live QQ membership must not implicitly authorize a database.
+    return scope.get('history_platforms', scope['platforms'])
+
 DEFAULT_PORT = 18777
+
+
+def connection_body(body):
+    """The three UI modules are authoritative, including stale hidden fields.
+
+    Older clients omit modules and retain their existing contract.
+    """
+    if not isinstance(body, dict):raise ValueError('连接配置字段无效。')
+    result = dict(body)
+    modules = result.pop('modules', None)
+    if modules is None:return result
+    if (not isinstance(modules, dict) or set(modules) != {'qq','wechat','bilibili'} or
+            any(type(v) is not bool for v in modules.values())):
+        raise ValueError('请选择有效的授权模块。')
+    for field in ('platforms','history_platforms'):
+        value = result.get(field, [])
+        if not isinstance(value,list) or any(p not in ('qq','wechat') for p in value):
+            raise ValueError('平台范围无效。')
+        result[field] = [p for p in value if modules[p]]
+    pairs = result.get('conversations', [])
+    if not isinstance(pairs,list) or any(not isinstance(p,list) or len(p)!=2 or p[0] not in ('qq','wechat') for p in pairs):
+        raise ValueError('会话范围无效。')
+    result['conversations'] = [p for p in pairs if modules[p[0]]]
+    if not modules['qq']:
+        for flag in ('onebot','send','manage','chat',*CHAT_MEDIA_FLAGS,*CHAT_EXTRA_FLAGS,*QQ_FLAGS):
+            result[flag] = False
+    if not modules['bilibili']:result['bilibili_read'] = result['bilibili_share'] = False
+    if not modules['qq']:result['bilibili_share'] = False
+    if not result['history_platforms']:
+        for flag in ('media','prepare','voice','onebot'):result[flag] = False
+    return result
 
 
 class AccessDenied(ValueError):
@@ -60,6 +97,8 @@ class MCPAccess:
             ''')
             if 'revision' not in {r[1] for r in db.execute('PRAGMA table_info(grants)')}:
                 db.execute('ALTER TABLE grants ADD COLUMN revision INTEGER NOT NULL DEFAULT 0')
+            if 'paused' not in {r[1] for r in db.execute('PRAGMA table_info(grants)')}:
+                db.execute('ALTER TABLE grants ADD COLUMN paused INTEGER NOT NULL DEFAULT 0')
 
     @contextmanager
     def connect(self):
@@ -93,15 +132,25 @@ class MCPAccess:
         return {p: bound_account(self.store, p) or '' for p in platforms}
 
     def create(self, body):
-        fields = {'name', 'platforms', 'conversations', 'all_conversations', 'start', 'end', 'media', 'prepare', 'voice', 'onebot', 'send', 'manage', 'chat', *CHAT_MEDIA_FLAGS, *CHAT_EXTRA_FLAGS, *QQ_FLAGS}
+        body = connection_body(body)
+        fields = {'name', 'platforms', 'history_platforms', 'conversations', 'all_conversations', 'start', 'end', *PERMISSION_FLAGS}
         if not isinstance(body, dict) or set(body) - fields:
             raise ValueError('连接配置字段无效。')
         name = body.get('name', '')
-        if not isinstance(name, str) or not name.strip() or len(name) > 60 or any(ord(c) < 32 for c in name):
-            raise ValueError('请填写不超过 60 字的连接名称。')
+        if not isinstance(name, str) or len(name) > 60 or any(ord(c) < 32 for c in name):
+            raise ValueError('连接名称不能超过 60 字。')
+        name = name.strip() or 'mcp-' + uuid.uuid4().hex[:12]
         platforms = body.get('platforms')
-        if not isinstance(platforms, list) or not platforms or any(p not in ('qq', 'wechat') for p in platforms):
+        if not isinstance(platforms, list) or (not platforms and body.get('bilibili_read') is not True) or any(p not in ('qq', 'wechat') for p in platforms):
             raise ValueError('请选择允许访问的平台。')
+        historical = body.get('history_platforms', platforms)
+        if (not isinstance(historical,list) or any(p not in platforms for p in historical) or
+                any(p not in ('qq','wechat') for p in historical)):
+            raise ValueError('历史数据读取范围必须属于所选平台。')
+        if not historical and not live_grant(body) and not body.get('bilibili_read'):
+            raise ValueError('请至少选择历史数据读取、实时 QQ 或 B站只读功能。')
+        if not historical and any(body.get(k) for k in ('media','prepare','voice')):
+            raise ValueError('历史图片、文件和语音读取需要先授权历史数据平台。')
         conversations = body.get('conversations', [])
         if not isinstance(conversations,list) or len(conversations)>500:
             raise ValueError('请选择最多 500 个会话。')
@@ -132,12 +181,12 @@ class MCPAccess:
             selection = json.dumps(pair, ensure_ascii=False)
             if selection not in selections:
                 selections.append(selection)
-        for flag in ('all_conversations', 'media', 'prepare', 'voice', 'onebot', 'send', 'manage', 'chat', *CHAT_MEDIA_FLAGS, *CHAT_EXTRA_FLAGS, *QQ_FLAGS):
+        for flag in ('all_conversations', *PERMISSION_FLAGS):
             if flag in body and type(body[flag]) is not bool:
                 raise ValueError('权限开关必须为布尔值。')
         if body.get('all_conversations'):
             selections = []
-        elif not selections:
+        elif platforms and not selections:
             raise ValueError('请选择会话，或明确允许所选平台的全部会话。')
         dates = {}
         for key in ('start', 'end'):
@@ -156,20 +205,26 @@ class MCPAccess:
         if start is not None and end is not None and start >= end:
             raise ValueError('开始日期不能晚于截止日期。')
         scope = dict(platforms=sorted(set(platforms)), conversations=selections, **dates,
-                     **{k: body.get(k, False) for k in ('media', 'prepare', 'voice', 'onebot', 'send', 'manage', 'chat', *CHAT_MEDIA_FLAGS, *CHAT_EXTRA_FLAGS, *QQ_FLAGS)})
+                     **{k: body.get(k, False) for k in PERMISSION_FLAGS})
+        if 'history_platforms' in body:
+            scope['history_platforms'] = sorted(set(historical))
         self.validate_permissions(scope)
         if chat_account:scope['chat_account'] = chat_account
         token = secrets.token_urlsafe(32)
         gid = uuid.uuid4().hex
         with self.connect() as db:
             db.execute('INSERT INTO grants(id,name,token_hash,scope,epoch,accounts,created_at) VALUES(?,?,?,?,?,?,?)',
-                       (gid, name.strip(), self.digest(token), json.dumps(scope), self.epoch(), json.dumps(self.accounts(platforms)), time.time()))
-        return dict(id=gid, token=token)
+                       (gid, name.strip(), self.digest(token), json.dumps(scope), self.epoch(), json.dumps(self.accounts(historical)), time.time()))
+        return dict(id=gid, name=name, token=token)
 
     @staticmethod
     def validate_permissions(scope):
         if scope.get('chat_poke') and not (scope.get('chat') and scope.get('send')):
             raise ValueError('拍一拍需要开启持续聊天及发送权限。')
+        if scope.get('bilibili_share') and (not scope.get('bilibili_read') or 'qq' not in scope['platforms']):
+            raise ValueError('B站原生分享需要 B站只读权限和 QQ 群范围。')
+        if not history_platforms(scope) and any(scope.get(k) for k in ('media','prepare','voice','onebot')):
+            raise ValueError('历史附件及历史群资料工具需要先授权历史数据平台。实时水群使用独立的实时权限。')
         if any(scope.get(k) for k in QQ_FLAGS) and 'qq' not in scope['platforms']:
             raise ValueError('SL 扩展权限需要选择 QQ 平台。')
         if any(scope.get(k) for k in ATTACHMENT_FLAGS) and not scope.get('chat'):
@@ -209,7 +264,7 @@ class MCPAccess:
         enabled = {k for k,v in changes.items() if v and not old.get(k)}
         # A reduction must work even when SL is offline. Enabling live QQ
         # capabilities verifies the existing account and never rebinds a token.
-        live_flags = {'onebot','send','manage','chat',*CHAT_MEDIA_FLAGS,*CHAT_EXTRA_FLAGS,*QQ_FLAGS}
+        live_flags = {'onebot','send','manage','chat','bilibili_share',*CHAT_MEDIA_FLAGS,*CHAT_EXTRA_FLAGS,*QQ_FLAGS}
         if enabled & live_flags and 'qq' in scope['platforms']:
             from .onebot import Client
             actual = Client(timeout=3).login()
@@ -260,10 +315,13 @@ class MCPAccess:
         grant = dict(row)
         from .mcp_owner import check_bound
         check_bound(self,grant['id'])
+        if grant.get('paused'):raise AccessDenied('此 MCP 连接已关闭，请在 Tulpa 中重新开启。')
         grant['scope'] = json.loads(grant['scope'])
         if not source:return grant  # Authentication only. Tool-specific checks still apply.
+        historical = history_platforms(grant['scope'])
+        if not historical:return grant  # Live-only connection has no imported source binding.
         try:
-            valid = grant['epoch'] == self.epoch() and json.loads(grant['accounts']) == self.accounts(grant['scope']['platforms'])
+            valid = grant['epoch'] == self.epoch() and json.loads(grant['accounts']) == self.accounts(historical)
         except ValueError:
             valid = False
         if not valid:
@@ -274,13 +332,32 @@ class MCPAccess:
         with self.connect() as db:
             db.execute('UPDATE grants SET revoked=1 WHERE id=?', (gid,))
 
+    def set_enabled(self, gid, enabled):
+        if type(enabled) is not bool:raise ValueError('连接开关无效。')
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            row = db.execute('SELECT paused,revoked FROM grants WHERE id=?',(gid,)).fetchone()
+            if not row or row['revoked']:raise AccessDenied('连接已删除或撤销，请重新创建。')
+            changed = bool(row['paused']) == enabled
+            if changed:
+                db.execute('UPDATE grants SET paused=?,revision=revision+1 WHERE id=?',(int(not enabled),gid))
+        return dict(id=gid,enabled=enabled,changed=changed)
+
+    def delete(self, gid):
+        # Keep independent learning libraries and operation receipts. The token
+        # hash and connection scope are removed, so this connection cannot resume.
+        with self.connect() as db:
+            db.execute('DELETE FROM calls WHERE grant_id=?',(gid,))
+            db.execute('DELETE FROM grants WHERE id=?',(gid,))
+        return dict(id=gid,deleted=True)
+
     def list(self):
         with self.connect() as db:
-            rows = [dict(r) for r in db.execute('SELECT id,name,scope,accounts,epoch,created_at,revoked,revision FROM grants ORDER BY created_at DESC')]
+            rows = [dict(r) for r in db.execute('SELECT id,name,scope,accounts,epoch,created_at,revoked,revision,paused FROM grants ORDER BY created_at DESC')]
             for row in rows:
                 row['scope'] = json.loads(row['scope'])
                 row['accounts'] = json.loads(row['accounts'])
-                try:row['valid']=not row['revoked'] and row.pop('epoch')==self.epoch() and row['accounts']==self.accounts(row['scope']['platforms'])
+                try:row['valid']=not row['revoked'] and (not history_platforms(row['scope']) or row.pop('epoch')==self.epoch() and row['accounts']==self.accounts(history_platforms(row['scope'])))
                 except ValueError:row['valid']=False
                 row.pop('epoch',None)
                 row['calls'] = db.execute('SELECT count(*) FROM calls WHERE grant_id=?', (row['id'],)).fetchone()[0]
@@ -318,7 +395,10 @@ class MCPAccess:
             db.execute('UPDATE calls SET status=?,seconds=?,messages=? WHERE id=?', (status, round(seconds, 3), messages, call_id))
 
     @staticmethod
-    def plan(grant):
+    def plan(grant, *, history=False):
         scope = grant['scope']
-        return Plan(platforms=scope['platforms'], conversations=scope['conversations'],
+        platforms = history_platforms(scope) if history else scope['platforms']
+        if history and not platforms:
+            raise AccessDenied('此连接未授权历史聊天数据读取。')
+        return Plan(platforms=platforms, conversations=scope['conversations'],
                     start=date_bound(scope['start']), end=date_bound(scope['end'], True))

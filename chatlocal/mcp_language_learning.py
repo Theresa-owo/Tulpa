@@ -273,8 +273,46 @@ class ChatLearning:
         with self.chat.lock:return self.store.status(self.library_binding(cid),records=records)
 
     def library_change(self,cid,body):
+        return self._change_library(self.library_binding(cid),body)
+
+    def local_libraries(self):
+        """Human-owned UI index; never exposed through MCP tools.
+
+        A stopped or deleted credential must not hide the owner's local library.
+        MCP callers still use authorized_library and its live grant boundaries.
+        """
         with self.chat.lock:
-            b=self.library_binding(cid)
+            grouped={}
+            with self.chat.access.connect() as db:
+                rows=[dict(r) for r in db.execute('SELECT id,conversation_id,name,persona_name,active,updated,last_contact FROM chat_sessions ORDER BY active DESC,updated DESC')]
+            for row in rows:
+                cid=row['conversation_id'];parts=cid.split(':')
+                if len(parts)!=3 or parts[1]!='group':continue
+                account,_,group=parts
+                item=grouped.setdefault(cid,dict(account=account,group=group,conversation_id=cid,name=row['name'],active=[],history=[]))
+                item['active' if row['active'] else 'history'].append(row)
+            with self.store.db() as db:
+                scopes={r[0] for r in db.execute('SELECT scope FROM language_libraries UNION SELECT scope FROM expressions UNION SELECT scope FROM jargon')}
+            for scope in scopes:
+                parts=scope.split(':')
+                if len(parts)!=4 or parts[0]!='qq' or parts[2]!='group':continue
+                _,account,_,group=parts;cid=scope[3:]
+                grouped.setdefault(cid,dict(account=account,group=group,conversation_id=cid,name='群 '+group,active=[],history=[]))
+            return sorted(grouped.values(),key=lambda g:(g['account'],g['group']))
+
+    def local_library(self,account,group,change=None):
+        with self.chat.lock:
+            if any(not isinstance(v,str) or not v.isascii() or not v.isdigit() or not 1<=len(v)<=20 for v in (account,group)):
+                raise LearningError('scope_unavailable')
+            found=next((g for g in self.local_libraries() if g['account']==account and g['group']==group),None)
+            if not found:raise LearningError('scope_unavailable')
+            row=found['active'][0] if found['active'] else None
+            b=dict(scope='qq:'+found['conversation_id'],gid=self.chat.row(row['id'])['grant_id'] if row else '',sid=row['id'] if row else '',epoch=self.epoch)
+            if change is not None:return self._change_library(b,change)
+            return self.store.status(b,records=True)
+
+    def _change_library(self,b,body):
+        with self.chat.lock:
             if set(body)=={'enabled'}:
                 if type(body['enabled']) is not bool:raise LearningError('invalid_setting')
                 with self.store.db() as db:

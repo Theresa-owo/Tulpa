@@ -4,11 +4,13 @@
   "fork_repository": "github.com/Theresa-owo/Tulpa",
   "branch": "main",
   "fork_base_commit": "16e331141439af7b19aaa8aec635eae38ddf33b9",
+  "upstream_integrated_commit": "6753a28a9757c93c0ad34ed54064965df2cb081c",
   "maintenance_policy": "Merge upstream into the fork; retain local patch history and stop on conflicts.",
   "patch_areas": [
     "Native QQ files, image reading and downloads",
     "Scoped MCP grant editing",
-    "Concurrent MCP reads and event-driven chat waits"
+    "Concurrent MCP reads and event-driven chat waits",
+    "Owner-origin checks and dedicated proactive/reply poke permission"
   ],
   "required_checks": [
     "scripts/check_fork_upstream_sync.py",
@@ -20,6 +22,10 @@
     "scripts/check_fork_owner_gate.py",
     "scripts/check_mcp_downloads.py",
     "scripts/check_mcp_qq_extensions.py",
+    "scripts/check_mcp_history_optional.py",
+    "scripts/check_bilibili.py",
+    "scripts/check_mcp_connection_ui.py",
+    "scripts/check_mcp_cli.py",
     "scripts/check_publication.py"
   ]
 }

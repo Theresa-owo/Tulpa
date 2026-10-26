@@ -18,4 +18,4 @@ MEDIA_FLAGS = ('chat_voice', 'chat_video', 'chat_files')
 
 
 def live_grant(body):
-    return bool(body.get('chat') and body.get('send') or any(body.get(k) for k in QQ_FLAGS))
+    return bool(body.get('send') or body.get('manage') or body.get('bilibili_share') or body.get('chat') and body.get('send') or any(body.get(k) for k in QQ_FLAGS))

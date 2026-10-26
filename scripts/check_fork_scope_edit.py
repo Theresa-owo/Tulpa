@@ -251,6 +251,8 @@ class ScopeEditTests(unittest.TestCase):
         class Service:
             def __init__(self, access):
                 self.source_base = ''
+                from types import SimpleNamespace
+                self.tools = SimpleNamespace(bilibili=SimpleNamespace(close=lambda: None))
         with patch.object(mcp_routes, 'MCPService', Service), patch('chatlocal.mcp_scope_edit.Client', return_value=self.bot):
             app = FastAPI()
             mcp_routes.install_mcp_routes(app, self.store)

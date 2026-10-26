@@ -172,7 +172,7 @@ class MCPChat:
         with self.access.connect() as db:
             active = db.execute('SELECT 1 FROM chat_sessions WHERE active=1 LIMIT 1').fetchone()
         with self.access.connect() as db:
-            friend_events=any(json.loads(r[0]).get('qq_friends') for r in db.execute('SELECT scope FROM grants WHERE revoked=0'))
+            friend_events=any(json.loads(r[0]).get('qq_friends') for r in db.execute('SELECT scope FROM grants WHERE revoked=0 AND paused=0'))
         if active or friend_events:self.receiver.start()
 
     def source_changed(self, state):

@@ -202,9 +202,10 @@ class ParallelTests(unittest.TestCase):
             allowed, checks = grant(), []
             access.authorize = lambda *args, **kwargs: checks.append('authorize') or allowed
             access.ensure_revision = lambda row: checks.append('revision') or row
-            access.plan = lambda row: Plan(platforms=['qq'])
+            access.plan = lambda row, **kwargs: Plan(platforms=['qq'])
             tools = object.__new__(mcp_tools.MCPTools)
             tools.access, tools.store = access, store
+            tools.bilibili = SimpleNamespace(schemas=lambda scope: [])
             tools.slots = threading.BoundedSemaphore(4)
             with patch.object(tools, 'onebot', side_effect=AssertionError('unrelated OneBot probe')):
                 names = {row['name'] for row in tools.schemas(allowed)}

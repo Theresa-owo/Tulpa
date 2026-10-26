@@ -20,7 +20,7 @@ Tulpa 可以作为本机资料服务，让 Codex 或其他支持 **Streamable HT
 8. 其他客户端选择 **Streamable HTTP**，填写显示的 MCP 地址，并设置 `Authorization: Bearer <显示的 MCP Token>`。这是 Tulpa 的访问凭据，不能用 OneBot Token 替代。连接凭据只显示一次；丢失后撤销重建。
 9. 保持 Tulpa 运行。勾选“关闭窗口后留在托盘”可继续提供 MCP 和实时读取；右键托盘图标可开机启动或彻底退出。重新打开沿用已保存的地址和授权，不必每次配置。
 
-源代码开发仍可执行 `setup.ps1` / `start.ps1`，然后打开同样的 MCP 页面。开发目录与便携包的配置、资料和授权独立，不自动迁移。
+源代码开发仍可执行 `scripts/windows/setup.ps1` / `scripts/windows/start.ps1`，然后打开同样的 MCP 页面。开发目录与便携包的配置、资料和授权独立，不自动迁移。
 
 ## DeepSeek Harness
 

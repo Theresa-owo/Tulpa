@@ -529,6 +529,24 @@ class DetailBot(ReactionBot):
         self.send_header('Content-Length',str(len(raw)));self.end_headers();self.wfile.write(raw)
 
 
+class HealthyEvents(Events):
+    """Long material fixtures need the same heartbeat as a healthy OneBot node."""
+    def __init__(self):
+        super().__init__()
+        self.heartbeat_stop=threading.Event()
+        self.heartbeat_thread=threading.Thread(target=self.heartbeat,daemon=True)
+        self.heartbeat_thread.start()
+
+    def heartbeat(self):
+        while not self.heartbeat_stop.wait(1):
+            self.send(dict(post_type='meta_event',meta_event_type='heartbeat',self_id=111,
+                           status=dict(online=True,good=True)))
+
+    def close(self):
+        self.heartbeat_stop.set();self.heartbeat_thread.join(3)
+        super().close()
+
+
 def main():
     from chatlocal.mcp_chat_details import sanitize_nodes,MAX_TEXT
     from chatlocal.mcp_chat_materials import incomplete
@@ -542,7 +560,7 @@ def main():
     assert not incomplete(dict(nodes=nested)),'exact nested node budget was incorrectly marked incomplete'
     # Windows OpenSSL needs its first initialization before the fixture clears env.
     ssl.create_default_context()
-    events=Events();DetailBot.sent=[];DetailBot.writes=[];DetailBot.history={};DetailBot.intercept=None
+    events=HealthyEvents();DetailBot.sent=[];DetailBot.writes=[];DetailBot.history={};DetailBot.intercept=None
     upstream=ThreadingHTTPServer(('127.0.0.1',0),DetailBot)
     threading.Thread(target=upstream.serve_forever,daemon=True).start()
     out=io.BytesIO();Image.new('RGB',(64,48),'blue').save(out,'PNG');raw=out.getvalue()
@@ -552,7 +570,10 @@ def main():
             (folder/'.env').write_text(f'REPLY_ONEBOT_URL=http://127.0.0.1:{upstream.server_port}\nREPLY_ONEBOT_WS_URL=ws://127.0.0.1:{events.port}\nREPLY_ONEBOT_WS_TOKEN=event-fixture\n','utf-8')
             cache=folder/'trusted';cache.mkdir()
             (folder/'mcp-chat-media-policy.json').write_text(json.dumps(dict(local_roots={'111':[str(cache)]})),'utf-8')
-            (folder/'mcp-chat-policy.json').write_text(json.dumps(dict(quiet_seconds=.1,reply_cooldown_seconds=0)),'utf-8')
+            # The six-resource nested fixture checks completeness, not latency.
+            # Fresh Windows HTTP/TLS clients can exhaust the production 3 s
+            # budget; deadline exhaustion is tested explicitly below.
+            (folder/'mcp-chat-policy.json').write_text(json.dumps(dict(quiet_seconds=.1,reply_cooldown_seconds=0,detail_budget_seconds=10)),'utf-8')
             with patch('chatlocal.onebot.ROOT',folder),patch('chatlocal.message_sender.ROOT',folder):
                 app=FastAPI();service=install_mcp_routes(app,store);access=service.access;tools=service.tools
                 with TestClient(app):

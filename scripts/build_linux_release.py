@@ -29,6 +29,11 @@ def build(output):
     payload = {}
     with tarfile.open(fileobj=io.BytesIO(snapshot)) as archive:
         for member in archive:
+            # Git emits directory entries too. The Bilibili vendor allowlist
+            # permits extensionless license files, so test the archive type
+            # before applying the file policy; directories have no payload.
+            if member.isdir():
+                continue
             if not included(member.name) or member.name == 'README.md':
                 continue
             if not member.isfile():
@@ -56,5 +61,5 @@ def build(output):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output', type=Path, default=ROOT/'release'/f'Tulpa-{VERSION}-linux.tar.gz')
+    parser.add_argument('--output', type=Path, default=ROOT/'release'/f'Tulpa-MCP-{VERSION}-linux.tar.gz')
     print(json.dumps(build(parser.parse_args().output), ensure_ascii=False, indent=2))

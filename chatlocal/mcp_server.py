@@ -60,8 +60,8 @@ class MCPService:
             rows = await anyio.to_thread.run_sync(self.tools.schemas, grant)
             await anyio.to_thread.run_sync(self.access.ensure_revision, grant)
             return [types.Tool(name=s['name'], description=s['description'], inputSchema=s['parameters'],
-                    annotations=types.ToolAnnotations(readOnlyHint=s['name'] not in QQ_WRITES and s['name'] not in CHAT_TOOLS and s['name'] not in MEDIA_WRITES and s['name'] not in ('prepare_file', 'download_file', 'transcribe_voice', 'read_qq_group', 'get_group_knowledge','send_qq_message','manage_qq_group'),
-                        destructiveHint=s['name'] in ('manage_qq_group','qq_group_action','qq_message_action','qq_file_action','qq_friend_action','qq_qzone_action','qq_album_action'), openWorldHint=s['name'] in QQ_WRITES-{'import_qq_media'} or s['name'] in ('send_qq_message','manage_qq_group','send_chat_reply','send_chat_message','send_chat_sticker','collect_chat_sticker','react_to_chat_message'))) for s in rows]
+                    annotations=types.ToolAnnotations(readOnlyHint=s['name'] not in QQ_WRITES and s['name'] not in CHAT_TOOLS and s['name'] not in MEDIA_WRITES and s['name'] not in ('prepare_file', 'download_file', 'transcribe_voice', 'read_qq_group', 'get_group_knowledge','send_qq_message','manage_qq_group','share_video_to_qq_group'),
+                        destructiveHint=s['name'] in ('manage_qq_group','qq_group_action','qq_message_action','qq_file_action','qq_friend_action','qq_qzone_action','qq_album_action'), openWorldHint=s['name'] in QQ_WRITES-{'import_qq_media'} or s['name'] in ('send_qq_message','manage_qq_group','send_chat_reply','send_chat_message','send_chat_sticker','collect_chat_sticker','react_to_chat_message','share_video_to_qq_group'))) for s in rows]
 
         @protocol.call_tool(validate_input=False)
         async def call_tool(name, arguments):
@@ -231,6 +231,7 @@ class MCPService:
                 self.error = 'MCP 服务未能启动，请查看依赖安装与端口设置。'
 
     def cancel(self, gid=None):
+        self.tools.bilibili.cancel(gid)
         with self.pending_lock:
             for (owner, _), event in self.pending.items():
                 if gid is None or gid == owner:
@@ -249,6 +250,26 @@ class MCPService:
                     self.tools.chat.receiver.start()
         return dict(result,ok=True,stopped_sessions=stopped,
                     note='权限已保存，原凭证继续有效；请刷新工具列表，需要聊天时重新开始会话。' if result['changed'] else '权限未变化，原会话继续运行。')
+
+    def set_connection_enabled(self, gid, enabled):
+        # Match permission editing: invalidate the revision before cancelling
+        # queues. Do not invert the send guard's operation/turn lock ordering.
+        with self.tools.chat.lock:
+            result=self.access.set_enabled(gid,enabled)
+            if result['changed']:
+                self.cancel(gid)
+                self.tools.chat.stop_all(gid,'连接开关已改变，请重新开始会话')
+        if enabled and not self.status()['running']:
+            self.access.configure(True,self.access.settings()['port'])
+            self.start()
+        return dict(result,service=self.status())
+
+    def delete_connection(self, gid):
+        with self.tools.chat.lock:
+            self.access.revoke(gid)
+            self.cancel(gid)
+            self.tools.chat.stop_all(gid,'连接已删除')
+            return self.access.delete(gid)
 
     def stop(self):
         with self.lock:

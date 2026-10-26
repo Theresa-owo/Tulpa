@@ -19,7 +19,8 @@ CHECKS=('reader_install','linux_distribution','linux_full','terminal_backend','t
         'mcp_chat_media','mcp_image_import','mcp_qq_extensions','mcp_grant_edit','mcp_chat_targets','mcp_downloads','mcp_onebot','mcp_actions','mcp_auto_learning',
         'mcp_sticker_library','mcp_expression_evidence','mcp_language_integration','mcp_jargon_matching',
         'mcp_jargon_pipeline','mcp_multi_group_learning',
-        'mcp_picker','image_identity','mcp_chat_enrichment','mcp_chat_output','mcp_image_reuse','reply_timing','antigravity_reply_timing')
+        'mcp_picker','image_identity','mcp_chat_enrichment','mcp_chat_output','mcp_image_reuse','reply_timing','antigravity_reply_timing',
+        'bilibili','mcp_history_optional','mcp_connection_ui','mcp_cli')
 
 
 def main():
@@ -36,6 +37,10 @@ def main():
         except subprocess.TimeoutExpired:ok=False
         row=dict(check=name,ok=ok,seconds=round(time.monotonic()-start,2),log=str(log.relative_to(ROOT)))
         rows.append(row);print(('PASS' if ok else 'FAIL')+' '+name+' '+str(row['seconds'])+'s',flush=True)
+        if not ok and log.is_file():
+            # These are isolated synthetic checks. Expose bounded failure
+            # details in CI instead of hiding the traceback in a local file.
+            print(log.read_text(errors='replace')[-12000:],flush=True)
     (folder/'results.json').write_text(json.dumps(rows,indent=2)+'\n')
     failed=[r['check'] for r in rows if not r['ok']]
     print('Completed:',len(rows),'Failed:',', '.join(failed) or 'none',flush=True)
