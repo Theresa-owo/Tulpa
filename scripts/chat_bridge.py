@@ -75,8 +75,27 @@ async def bootstrap(client,request):
     result=dict(sessions=sessions,static_contexts=share_static(contexts),receiver=listing['receiver'],
         request_policy=policies[0] if all(p==policies[0] for p in policies) else {s['id']:p for s,p in zip(sessions,policies)},recovery_required=recovery)
     if any('inherits_static_version' in c for c in result['static_contexts'].values()):result['static_context_rule']='继承版本的完整人格及行为，再逐字追加persona_append；此为无损共享，不是摘要。'
-    if not recovery:result['next_call']=dict(tool='wait_chat_messages_many',arguments=dict(session_ids=[s['id'] for s in sessions],known_prompt_versions={s['id']:s['prompt_version'] for s in sessions},timeout_seconds=150,limit=8))
+    if not recovery:result['next_call']=dict(tool='wait_chat_messages_many',arguments=dict(session_ids=[s['id'] for s in sessions],known_prompt_versions={s['id']:s['prompt_version'] for s in sessions},timeout_seconds=150,limit=30))
     return result
+
+
+async def reply_text(client,args):
+    """One model decision, original Planner + send, explicit no-reference choice.
+
+    Media, broadcast, files and learned-expression selection retain their normal
+    tools. A failed plan is returned verbatim, never retried or acknowledged.
+    """
+    required={'session_id','batch_id','text','expression_ids'}
+    if (not isinstance(args,dict) or not required<=set(args)
+        or set(args)-required-{'target_event_id','intent'} or args['expression_ids']!=[]
+        or not isinstance(args['text'],str) or not 1<=len(args['text'])<=4000):
+        raise ValueError('Plain text requires session_id, batch_id, text and explicit expression_ids=[]; use normal tools for learned references/media')
+    plan_args=dict(session_id=args['session_id'],batch_id=args['batch_id'],action='reply',expressions=['text'],intent=args.get('intent','自然接话'))
+    if args.get('target_event_id') is not None:plan_args['target_event_id']=args['target_event_id']
+    plan=payload(await client.call_tool('plan_chat_reply',plan_args))
+    if plan.get('state')!='READY':return dict(stage='plan',result=plan)
+    result=payload(await client.call_tool('send_chat_reply',dict(session_id=args['session_id'],plan_id=plan['plan_id'],expression_ids=[],bubbles=[dict(kind='text',text=args['text'])])))
+    return dict(stage='send',plan_id=plan['plan_id'],result=result)
 
 
 async def main():
@@ -94,6 +113,7 @@ async def main():
                 for line in requests:
                     request=json.loads(line)
                     if request['tool']=='__bootstrap':value=await bootstrap(client,request)
+                    elif request['tool']=='__reply_text':value=await reply_text(client,request.get('arguments',{}))
                     elif request['tool']=='__wait':
                         args=dict(request.get('arguments',request.get('args',{})))
                         if 'wait_state_id' not in args and 'session_ids' not in args:

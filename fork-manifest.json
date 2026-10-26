@@ -16,6 +16,7 @@
     "scripts/check_fork_upstream_sync.py",
     "scripts/check_fork_mcp_parallel.py",
     "scripts/check_fork_mcp_realtime.py",
+    "scripts/check_chat_attention.py",
     "scripts/check_fork_native_files.py",
     "scripts/check_fork_scope_edit.py",
     "scripts/check_fork_permissions.py",

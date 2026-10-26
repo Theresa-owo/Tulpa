@@ -196,11 +196,11 @@ def packet(row, recent, batch, *, event='messages', has_more=False, stickers=Non
     if event == 'source_unavailable':
         hints.append('实时来源断开，继续等连接恢复，暂不发言。')
     elif has_more:
-        hints.append('还有未读的新消息，先接着读再决定发言，避免回复已经转走的话题。')
+        hints.append('本页后还有未读消息；当前话题需要后续才能判断时先接着读，不要因为还有不相关旧积压就一律沉默。可对本批已读且语境完整的点名和话题规划回复，发送前仍核对相关新消息。')
     elif (reaction_notices or {}).get('new_items'):
         hints.append('有人对你之前的发言添加或撤销了表情回应。先读 reaction_notices.new_items 的原消息和操作者，结合人格与语境决定回一句、贴回应或沉默；不用逐项回礼。items 中旧通知不要重复接话，自己的回声不接。处理后继续 wait_chat_messages。')
     elif event == 'idle':
-        hints.append('暂时没有新消息；不发群消息，现在直接调用 wait_chat_messages。不要用“我会继续等待”的最终答复结束 Agent 回合；结束回合就没有模型在读消息。')
+        hints.append('暂时没有新消息。可按人格、参与度和已有话题判断是否主动接梗或开话题；没有真实参与意图就继续 wait。没人接上一句时先等，不因每次 idle 机械发言。decision_required=false 只表示无待确认输入，不禁止有意图时用本批 Planner。不要用等待报告结束 Agent。')
     if state['may_be_unfinished']:
         hints.append('最后一句可能没说完，先等一次短窗口听后续；这只是提示，不是确定的语义结论。')
     if state['consecutive_own_messages'] >= 2 or (len(recent) >= 6 and state['own_messages'] >= 4 and state['own_messages'] > state['observed_messages']/2):

@@ -158,6 +158,8 @@ class ChatTurns:
         with self.access.connect() as db:
             db.execute('INSERT INTO chat_input_batches VALUES(?,?,?,?,?,?,?)',
                        (bid,row['id'],self.epoch,now,max(ids,default=row['cursor']),dump(ids),row['gap_count']))
+            from .mcp_chat_attention import remember
+            remember(db,row,bid,ids,collection)
             db.execute('DELETE FROM chat_input_batches WHERE session_id=? AND id NOT IN (SELECT id FROM chat_input_batches WHERE session_id=? ORDER BY created DESC LIMIT 64)',(row['id'],row['id']))
         # Preserve individual IDs/time/sources; grouping is only a reading aid.
         bursts=[]
@@ -324,7 +326,7 @@ class ChatTurns:
         if blocked(self.access,sid):raise TurnRejected('agent_paused','外部聊天运行器已暂停，未派发新表达。')
         if cancel.is_set():raise TurnRejected('cancelled','本次发送已取消。')
         policy=self.policy();now=time.time()
-        if data['epoch']!=self.epoch or row['gap_count']!=data['gap']:
+        if data['epoch']!=self.epoch:
             raise TurnRejected('needs_refresh','实时连接曾中断或缓存缺失，请补读并重新规划。')
         if now-p['created']>policy['plan_ttl_seconds']:
             raise TurnRejected('plan_expired','计划已过期，请补读并重新规划。')
@@ -332,6 +334,14 @@ class ChatTurns:
         if source['state']!='connected' or source['account']!=row['conversation_id'].split(':')[0]:
             raise TurnRejected('source_unavailable','实时接收未连接，暂停发言。')
         rows=self.data(sid);indexed={m['id']:m for m in rows}
+        with self.access.connect() as db:
+            attention=db.execute('SELECT ids,connected_at FROM chat_attention_batches WHERE session_id=? AND batch_id=?',(sid,data['batch_id'])).fetchone()
+        if attention and attention['connected_at'] is not None and attention['connected_at']!=source.get('connected_at'):
+            raise TurnRejected('needs_refresh','实时连接已更换，请补读当前话题。')
+        if row['gap_count']!=data['gap']:
+            intact=bool(attention and attention['connected_at'] is not None and attention['connected_at']==source.get('connected_at')
+                        and all(eid in indexed for eid in json.loads(attention['ids'])))
+            if not intact:raise TurnRejected('needs_refresh','实时连接曾中断或本批材料缺失，请补读并重新规划。')
         for eid in data['focus_ids']:
             m=indexed.get(eid)
             poke=bool(m and m.get('source')=='onebot_notice' and m.get('notice',{}).get('type')=='poke')

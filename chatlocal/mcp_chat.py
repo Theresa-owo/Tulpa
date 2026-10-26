@@ -104,6 +104,9 @@ def schemas(tool):
     return rows + turn_schemas(tool) + learning_schemas(tool)
 
 
+CHAT_INSTRUCTIONS += '\n实时点名和当前话题优先，attention.backlog_pending 表示保留的旧积压，不等于当前话题仍缺材料。has_more 需要相关后续才补读，不应一律等待旧历史读完。idle 无参与意图时不需规划；确有自然参与意图仍可按人格和参与度用本批 Planner 主动聊，不机械发言。优先批次确认只完成其具体事件，连续游标不跳过未读旧消息。'
+
+
 class ChatStopped(ValueError):
     pass
 
@@ -159,6 +162,8 @@ class MCPChat:
             db.execute('DELETE FROM chat_inbox WHERE session_id IN (SELECT id FROM chat_sessions WHERE active=0)')
             # A previous process's heartbeat is not proof an Agent reconnected.
             db.execute('UPDATE chat_sessions SET last_contact=0 WHERE active=1')
+        from . import mcp_chat_attention
+        mcp_chat_attention.install(self.access)
         self.receiver = EventReceiver(self.receive, self.source_changed)
         self.was_connected = False
         from .mcp_chat_media import ChatMedia
@@ -281,8 +286,10 @@ class MCPChat:
     def context(self, grant, row, recovery=False, cancel=None,limit=50):
         with self.access.connect() as db:
             if recovery:
-                pending=db.execute('SELECT * FROM chat_inbox WHERE session_id=? AND id>? ORDER BY id LIMIT ?',(row['id'],row['cursor'],limit+1)).fetchall()
-                history=db.execute('SELECT * FROM chat_inbox WHERE session_id=? AND id<=? ORDER BY id DESC LIMIT 5',(row['id'],row['cursor'])).fetchall()
+                from .mcp_chat_attention import select
+                pending,attention=select(self,row,limit)
+                before=pending[0]['id']-1 if attention['priority'] and pending else row['cursor']
+                history=db.execute('SELECT * FROM chat_inbox WHERE session_id=? AND id<=? ORDER BY id DESC LIMIT 5',(row['id'],before)).fetchall()
                 recent=list(reversed(list(reversed(history))+pending[:limit]))
                 more=len(pending)>limit
             else:
@@ -291,7 +298,9 @@ class MCPChat:
             db.executemany('UPDATE chat_inbox SET delivered=1 WHERE session_id=? AND id=?',[(row['id'],r['id']) for r in recent])
             if recent:db.execute('UPDATE chat_sessions SET offered=max(offered,?) WHERE id=?',(max(r['id'] for r in recent),row['id']))
         items=self.details.enrich(grant,row,self.messages(reversed(recent)),cancel)
-        return dict(messages=items,has_more=more, note='本会话事件；恢复优先交付未确认消息。引用/转发是父事件的材料，不是新的实时发言。未读取历史数据库。')
+        result=dict(messages=items,has_more=more, note='本会话事件；优先交付实时点名和当前话题，旧积压保留。引用/转发是材料，不是新的发言。')
+        if recovery:result['attention']=attention
+        return result
 
     def continuation(self, sid, *, through=None):
         """Executable read-only continuation; never invent or advance a cursor."""
@@ -302,8 +311,8 @@ class MCPChat:
         return dict(tool='wait_chat_messages',arguments=args)
 
     def consume_sent_echoes(self, row, pending):
-        # A same-account phone message is still input. Only acknowledge a
-        # contiguous prefix linked to our own successful, persisted send receipt.
+        # A same-account phone message is still input. Only complete echoes
+        # linked to our own persisted receipt; never jump unread older holes.
         ids=[]
         for item in pending:
             payload=json.loads(item['payload'])
@@ -311,16 +320,18 @@ class MCPChat:
             ids.append(item['id'])
         if not ids:return 0
         with self.access.connect() as db:
+            db.executemany('UPDATE chat_inbox SET delivered=1,completed=1 WHERE session_id=? AND id=?',[(row['id'],eid) for eid in ids])
+            from .mcp_chat_attention import advance
+            cursor=advance(db,row)
             db.execute('UPDATE chat_sessions SET cursor=max(cursor,?),offered=max(offered,?) WHERE id=? AND active=1',
-                       (ids[-1],ids[-1],row['id']))
-            db.executemany('UPDATE chat_inbox SET delivered=1 WHERE session_id=? AND id=?',[(row['id'],eid) for eid in ids])
+                       (cursor,ids[-1],row['id']))
         return len(ids)
 
     @timing.stage('chat.guidance')
     def guidance(self, grant, row, items, *, through, event='messages', has_more=False, full=False):
         # Never let prompt enrichment peek at the next page or another group.
         with self.access.connect() as db:
-            recent=db.execute('SELECT * FROM chat_inbox WHERE session_id=? AND id<=? ORDER BY id DESC LIMIT 40',
+            recent=db.execute('SELECT * FROM chat_inbox WHERE session_id=? AND id<=? AND delivered=1 ORDER BY id DESC LIMIT 40',
                               (row['id'],min(through,row['offered']))).fetchall()
         observed={m['id']:m for m in self.messages(recent)}
         observed.update({m['id']:m for m in items})
@@ -564,7 +575,7 @@ class MCPChat:
                 result['next_call']=self.continuation(sid)
             else:
                 with self.access.connect() as db:
-                    result['pending_messages']=db.execute('SELECT count(*) FROM chat_inbox WHERE session_id=? AND id>?',(sid,row['cursor'])).fetchone()[0]
+                    result['pending_messages']=db.execute('SELECT count(*) FROM chat_inbox WHERE session_id=? AND id>? AND completed=0',(sid,row['cursor'])).fetchone()[0]
                     operations=db.execute("SELECT id,kind,state FROM operations WHERE grant_id=? AND conversation_id=? AND state IN ('UNKNOWN','EXECUTING') ORDER BY created DESC",(grant['id'],row['conversation_id'])).fetchall()
                 result['unsettled_operations']=[dict(r,read_call=dict(tool='get_qq_operation',arguments={'operation_id':r['id']})) for r in operations]
                 result['next_call']=(self.continuation(sid) if known_static_version==version else dict(tool='get_chat_session',arguments=dict(session_id=sid,view='persona')))
@@ -604,7 +615,9 @@ class MCPChat:
         result={}
         if row['active']:
             result['context']=self.context(grant,row,recovery,cancel,limit=limit)
-            result['input_batch']=self.turns.batch(row,result['context']['messages'])
+            attention=result['context'].get('attention',{})
+            collection=dict(reason=attention.get('reason','context_read'),priority=attention.get('priority',False),source_connected_at=attention.get('source_connected_at'),ready_to_send=False)
+            result['input_batch']=self.turns.batch(row,result['context']['messages'],collection)
         row=self.row(row['id'])
         result['session']=self.public(row)
         items=result.get('context',{}).get('messages',[])
@@ -775,7 +788,6 @@ class MCPChat:
                 for stream in streams:
                     packet=next(stream)
                     if isinstance(packet,tuple):
-                        if packet[1]==2:return [next(stream)]
                         candidates.append((packet[1],stream))
                         continue
                     if packet is not None:return [packet]
@@ -809,8 +821,10 @@ class MCPChat:
                     db.execute('BEGIN IMMEDIATE')
                     if db.execute("SELECT 1 FROM chat_turn_plans WHERE session_id=? AND state='WAITING'",(sid,)).fetchone():
                         ack=row['cursor']
+                    from .mcp_chat_attention import acknowledge
+                    cursor=acknowledge(db,row,ack)
                     db.execute('UPDATE chat_sessions SET cursor=?,note=?,updated=? WHERE id=? AND active=1',
-                               (ack,args.get('note',row['note']),time.time(),sid))
+                               (cursor,args.get('note',row['note']),time.time(),sid))
             row=self.row(sid,gid)
         elif 'note' in args:raise ValueError('保存话题说明时请同时确认已处理的消息进度。')
 
@@ -829,9 +843,8 @@ class MCPChat:
             except ChatStopped:yield dict(event='stopped' if not self.row(sid)['active'] else 'service_offline',session_id=sid,session=self.public(self.row(sid)),messages=[]);return
             if time.monotonic()-heartbeat>=10:
                 self.touch(sid);heartbeat=time.monotonic()
-            with self.access.connect() as db:
-                pending=db.execute('SELECT * FROM chat_inbox WHERE session_id=? AND id>? ORDER BY id LIMIT ?',
-                                   (sid,row['cursor'],limit+1)).fetchall()
+            from .mcp_chat_attention import select
+            pending,attention=select(self,row,limit)
             consumed=self.consume_sent_echoes(row,pending)
             if consumed:
                 echoes+=consumed
@@ -857,7 +870,7 @@ class MCPChat:
             learning=self.learning.wake(grant,row) if allow_learning and not pending and not notices and now>=earliest else dict(ready=False)
             if (now>=earliest and ((pending and not deferred and (len(pending)>limit or collection['ready'])) or (notices and now-changed_at>=quiet) or learning['ready'])) or now>=end:
                 # An expired idle session must not hide another group's input.
-                yield ('ready',2 if (pending and not deferred) or notices else 1 if learning['ready'] else 0)
+                yield ('ready',attention['rank'] if pending and not deferred else 3 if notices else 1 if learning['ready'] else 0)
                 items=self.details.enrich(grant,row,self.messages(pending[:limit] if not deferred else []),cancel)
                 through=items[-1]['id'] if items else max(row['cursor'],row['dropped_through'])
                 with self.lock:
@@ -878,8 +891,10 @@ class MCPChat:
                             has_more=not deferred and len(pending)>len(items),continue_waiting=True,acknowledged_sent_echoes=echoes,
                             receiver=status,gap_count=row['gap_count'],gap_note='接收曾中断或缓存溢出，不保证消息完整。' if row['gap_count'] else '',
                             note='处理后以 read_through_id 确认；idle 继续等待，不表示整个聊天结束。')
+                result['attention']=attention
                 if len(pending)>limit:collection['reason']='page_limit'
                 elif now>=end:collection['reason']='timeout'
+                if attention['priority']:collection.update(priority=True,reason=attention['reason'],source_connected_at=attention.get('source_connected_at'))
                 result['input_batch']=self.turns.batch(row,items,collection)
                 changed=bool(args.get('known_prompt_version') and args['known_prompt_version']!=prompts.version(row))
                 result['chat_guidance']=self.guidance(grant,row,items,through=through,
