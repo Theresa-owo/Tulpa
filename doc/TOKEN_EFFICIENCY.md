@@ -15,6 +15,7 @@
 - 明确决定沉默时，下次 wait 传 `silence_batch_id`，或 wait_many 的 `silence_batches={session_id:batch_id}`，由服务端调用原 Planner 记下 SILENT 并确认，省去一次工具往返。没有模型判断时不能自动填；READY/WAITING/SENDING/UNKNOWN 阻止此快捷确认，批次无效不推进游标。
 - 多群等待返回绑定当前连接的 `wait_state_id`，原样沿 next_call 续接，避免每次携带8群ID/版本/游标。可同时覆盖 timeout、ACK 或加入下一批明确的 silence_batches。状态重启失效或半小时过期时，以原 session_ids 和实际游标恢复，不能重发历史动作。每次仍重新验证当前授权/会话。
 - 空闲沿150秒长轮询，不提交空规划，不反复读会话列表，不输出等待报告。实时新事件仍立即唤醒；未增加静默丢消息或自动回复规则。
+- 生产运行器只向模型提供本批数据与按需工具桥接，普通文字的原Planner/发送往返在本地执行。模型仍决定接话内容、复杂度与学习表达选择；详见[生产入口](CHAT_PRODUCTION.md)。
 
 ## 策略与兼容
 

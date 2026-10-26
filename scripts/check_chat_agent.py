@@ -1,11 +1,16 @@
 """Pure controller tests: no model process, authentication or real QQ writes."""
 import io
+import collections
 from pathlib import Path
+import queue
 import sys
+import time
+from types import SimpleNamespace
+import tempfile
 import unittest
 
 sys.path[:0]=[str(Path(__file__).resolve().parents[1]),str(Path(__file__).resolve().parent)]
-from chat_agent import Budget,AppServer,overrides
+from chat_agent import Budget,AppServer,overrides,text_replies
 
 
 def usage(i,c,o=0,last_i=None,last_c=None,last_o=0):
@@ -14,6 +19,15 @@ def usage(i,c,o=0,last_i=None,last_c=None,last_o=0):
 
 
 class Tests(unittest.TestCase):
+    def app(self):
+        app=object.__new__(AppServer);calls=[]
+        app.reason=None;app.thread_id='thread';app.turn_id='turn';app.interrupt_at=None
+        app.stop_file=SimpleNamespace(exists=lambda:False);app.on_update=lambda:None
+        app.fence=lambda paused,reason:calls.append(('fence',reason));app.send=lambda *a:calls.append(('send',a[0]))
+        app.process=SimpleNamespace(poll=lambda:None);app.messages=queue.Queue();app.responses={}
+        app.events=collections.deque(maxlen=24);app.budget=Budget()
+        return app,calls
+
     def test_initial_and_steady_budgets_distinguish_cached_tokens(self):
         b=Budget();self.assertIsNone(b.record(usage(17000,0,5),now=1))
         b.initializing=False
@@ -43,6 +57,48 @@ class Tests(unittest.TestCase):
         for k in ('service_tier','approval_policy','sandbox_mode','features.shell_tool'):self.assertNotIn(k,result)
         self.assertEqual(cfg['service_tier'],'default')
         with self.assertRaises(ValueError):overrides(dict(model_provider='third_party'))
+
+    def test_timeout_closes_send_fence_even_when_no_protocol_events_arrive(self):
+        app,calls=self.app()
+        with self.assertRaisesRegex(TimeoutError,'model_turn_timeout'):app.event(time.monotonic()-.01)
+        self.assertEqual(calls,[('fence','model_turn_timeout'),('send','turn/interrupt')])
+
+    def test_error_keeps_only_code_and_honors_server_retry(self):
+        app,calls=self.app()
+        app.messages.put(dict(method='error',params=dict(error=dict(message='private server detail',codexErrorInfo='serverOverloaded'),willRetry=True)))
+        app.event(time.monotonic()+1);self.assertFalse(calls)
+        self.assertNotIn('private server detail',str(app.events))
+        app.messages.put(dict(method='error',params=dict(error=dict(codexErrorInfo='rateLimitExceeded'),willRetry=False)))
+        app.event(time.monotonic()+1)
+        self.assertEqual(calls[0],('fence','model_server_error'))
+
+
+class TextReplyTests(unittest.IsolatedAsyncioTestCase):
+    async def test_validate_every_group_before_any_side_effect(self):
+        calls=[]
+        class MCP:
+            async def call_tool(self,*args):calls.append(args)
+        with tempfile.TemporaryDirectory() as tmp:
+            allowed={'a':{'input_batch':{'id':'batch'}}}
+            proposals={'a':dict(batch_id='batch',text='hello'),'foreign':dict(batch_id='batch',text='bad')}
+            with self.assertRaisesRegex(RuntimeError,'invalid_text_decision'):
+                await text_replies(MCP(),proposals,allowed,Path(tmp)/'journal.json')
+            self.assertFalse(calls)
+
+    async def test_unknown_receipt_never_retried_or_replaced(self):
+        calls=[]
+        class MCP:
+            async def call_tool(self,name,args):
+                calls.append((name,args))
+                value=dict(state='READY',plan_id='plan') if name=='plan_chat_reply' else dict(state='UNKNOWN')
+                return SimpleNamespace(structuredContent=value,content=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            journal=Path(tmp)/'journal.json';allowed={'a':{'input_batch':{'id':'batch'}}}
+            with self.assertRaisesRegex(RuntimeError,'UNKNOWN'):
+                await text_replies(MCP(),{'a':dict(batch_id='batch',text='hello')},allowed,journal)
+            self.assertEqual([n for n,_ in calls],['plan_chat_reply','send_chat_reply'])
+            self.assertEqual(calls[1][1]['plan_id'],'plan');self.assertNotIn('idempotency_key',calls[1][1])
+            self.assertTrue(journal.exists())
 
 
 if __name__=='__main__':unittest.main()

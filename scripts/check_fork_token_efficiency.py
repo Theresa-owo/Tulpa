@@ -68,6 +68,14 @@ async def transport(service,token,sids,configure):
                 assert sent.structuredContent is None and data(sent)['state']=='SUCCEEDED'
                 assert data(await client.call_tool('send_chat_reply',reply))['state']=='SUCCEEDED'
                 assert len(OneBot.sent)==1,'Optimized replay duplicated a send'
+                # Simulate a controller crash after success but before ACK.
+                # Reconcile actual terminal receipts without another model or
+                # send; a new controller must not replay the completed batch.
+                from chat_agent import receipt_acks
+                recovered=await receipt_acks(client,[sids[2]])
+                assert recovered[sids[2]]==plan['decision']['watermark']
+                again=data(await client.call_tool('wait_chat_messages_many',dict(session_ids=[sids[2]],acknowledge_through_ids=recovered,timeout_seconds=0)))
+                assert not again['results'][0].get('decision_required') and len(OneBot.sent)==1
                 return dict(directory_legacy_chars=len(legacy.model_dump_json()),directory_optimized_chars=len(result.model_dump_json()),bootstrap_eight_groups_chars=chars(start),shared_persona_count=len(start['static_contexts']))
 
 
