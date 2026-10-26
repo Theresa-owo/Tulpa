@@ -40,7 +40,7 @@
   </section><p id="mcp-error" role="alert"></p></div>`;
   document.body.append(dialog);
   const settings=node('dialog');settings.id='mcp-service-settings';settings.className='mcp-dialog';
-  settings.innerHTML=`<div class="dialog-head"><h2>服务设置</h2><button id="mcp-service-close" type="button" class="icon-button" aria-label="关闭服务设置">×</button></div><div class="mcp-body"><p id="mcp-service-status" role="status"></p><details id="mcp-advanced"><summary>高级服务设置</summary><div class="mcp-service"><label><input id="mcp-enabled" type="checkbox">启用 MCP 服务</label><label>端口<input id="mcp-port" type="number" min="1024" max="65535" value="18777"></label><button id="mcp-save-service" type="button">保存</button></div></details><details id="mcp-audit-details"><summary>访问记录</summary><div id="mcp-audit"></div></details><details id="mcp-operation-history"><summary>QQ 操作记录</summary><div id="mcp-operations"></div></details><p id="mcp-service-error" class="mcp-warning" role="alert"></p></div>`;
+  settings.innerHTML=`<div class="dialog-head"><h2>服务设置</h2><button id="mcp-service-close" type="button" class="icon-button" aria-label="关闭服务设置">×</button></div><div class="mcp-body"><p id="mcp-service-status" role="status"></p><label><input id="mcp-efficiency" type="checkbox">省 Token 模式</label><p class="mcp-muted">保留完整消息；按需看图、共享学习预算、去除重复传输。关闭可兼容依赖双份结果的旧客户端。</p><details id="mcp-advanced"><summary>高级服务设置</summary><div class="mcp-service"><label><input id="mcp-enabled" type="checkbox">启用 MCP 服务</label><label>端口<input id="mcp-port" type="number" min="1024" max="65535" value="18777"></label><button id="mcp-save-service" type="button">保存</button></div></details><details id="mcp-audit-details"><summary>访问记录</summary><div id="mcp-audit"></div></details><details id="mcp-operation-history"><summary>QQ 操作记录</summary><div id="mcp-operations"></div></details><p id="mcp-service-error" class="mcp-warning" role="alert"></p></div>`;
   document.body.append(settings);
   const managedQQ=window.TulpaSnowLuma?.mount($('mcp-snowluma-managed'),{prefix:'mcp',onSaved:async()=>refresh()});
   let current=null,credential=null,busy=false,selected=new Map(),page=0,searchVersion=0,searchTimer,liveConversations=null,listSignature='';
@@ -49,7 +49,7 @@
   const historyPlatforms=()=>['qq','wechat'].filter(p=>modules()[p]&&$('mcp-'+p).checked);
   const hasLive=()=>modules().qq&&['send','chat','manage'].some(f=>$('mcp-'+f).checked);
   const scopePlatforms=()=>[...new Set([...historyPlatforms(),...(hasLive()?['qq']:[])])];
-  function state(data){current=data;$('mcp-enabled').checked=data.enabled;$('mcp-port').value=data.port;$('mcp-service-status').textContent=data.error||(data.running?'MCP 运行中':'MCP 已停止');$('mcp-onebot-status').textContent=data.onebot_configured?'已配置':'待连接';renderConnections();warnImport();}
+  function state(data){current=data;$('mcp-efficiency').checked=!!data.efficiency?.enabled;$('mcp-enabled').checked=data.enabled;$('mcp-port').value=data.port;$('mcp-service-status').textContent=data.error||(data.running?'MCP 运行中':'MCP 已停止');$('mcp-onebot-status').textContent=data.onebot_configured?'已配置':'待连接';renderConnections();warnImport();}
   async function refresh(){state(await api(''));}
   function warnImport(){for(const p of ['qq','wechat'])$('mcp-'+p+'-import-warning').hidden=!(modules()[p]&&$('mcp-'+p).checked&&!current?.data_platforms?.[p]);}
   function renderConnections(){
@@ -198,6 +198,7 @@
   $('mcp-install-codex').onclick=()=>action(async()=>{if(!renderCodexConfig())return;const b=$('mcp-install-codex');b.disabled=true;try{await api('/connections/'+encodeURIComponent(credential.id)+'/codex','POST',{token:credential.token,server_name:$('mcp-server-name').value});$('mcp-install-result').textContent='已写入，请在 Codex 中重新连接 MCP。';}finally{b.disabled=false;}});
   $('open-service-settings')?.addEventListener('click',()=>{settings.showModal();refresh().catch(e=>$('mcp-service-error').textContent=e.message);});
   $('mcp-service-close').onclick=()=>settings.close();
+  $('mcp-efficiency').onchange=()=>action(async()=>{await api('/efficiency','PUT',{enabled:$('mcp-efficiency').checked});await refresh();});
   $('mcp-save-service').onclick=async()=>{try{await api('','PUT',{enabled:$('mcp-enabled').checked,port:Number($('mcp-port').value)});await refresh();$('mcp-service-error').textContent='';}catch(e){$('mcp-service-error').textContent=e.message;}};
   $('mcp-audit-details').addEventListener('toggle',()=>{if($('mcp-audit-details').open)$('mcp-audit').replaceChildren(...(current?.recent||[]).map(r=>node('p',r.name+' · '+r.tool+' · '+r.status)));});
   $('mcp-operation-history').addEventListener('toggle',async()=>{if(!$('mcp-operation-history').open)return;try{const d=await api('/operations');$('mcp-operations').replaceChildren(...d.operations.map(r=>node('p',r.connection_name+' · '+r.state+' · '+r.summary)));}catch(e){$('mcp-service-error').textContent=e.message;}});

@@ -77,8 +77,10 @@ class MCPService:
                         self.wait_limiter=anyio.CapacityLimiter(16)
                     if name in MEDIA_TOOLS and self.media_limiter is None:
                         self.media_limiter=anyio.CapacityLimiter(4)
-                    return await anyio.to_thread.run_sync(self.tools.call, token, name, arguments, cancel, self.source_base,
+                    result=await anyio.to_thread.run_sync(self.tools.call, token, name, arguments, cancel, self.source_base,
                         abandon_on_cancel=True, limiter=self.wait_limiter if name in CHAT_WAIT_TOOLS else self.media_limiter if name in MEDIA_TOOLS else None)
+                    from .mcp_efficiency import wire_result
+                    return wire_result(self.access,result)
             except AccessDenied:
                 return self.tools.result(dict(error='连接已失效，请重新授权。'))
             except TimeoutError:

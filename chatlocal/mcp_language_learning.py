@@ -77,6 +77,8 @@ class ChatLearning:
         except LearningError:
             self.config_error=True
             self.store=LanguageStore(chat.access.path.parent/'mcp-language.sqlite3')
+        from .mcp_efficiency import policy as efficiency_policy
+        self.store.efficiency=lambda:efficiency_policy(chat.access)
         with self.store.db() as db:
             self.enabled={r['scope'] for r in db.execute('SELECT scope FROM language_libraries WHERE enabled=1')}
         self.attached=set();self.yield_required=set();self.shutdown=threading.Event();self.worker=None

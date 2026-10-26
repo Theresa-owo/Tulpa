@@ -28,6 +28,9 @@ def prepare(chat,grant,data,cancel,*,forward_session_id=None):
     if not sid:return data,[]
     grant,row=chat.validate(sid,grant['id'],active=False)
     if not row['active']:return data,[]
+    from .mcp_efficiency import policy
+    cfg=policy(chat.access)
+    lazy=cfg['enabled'] and cfg['images']=='on_demand'
     images=[];entries=[];attempts=0;prepared=[]
     deadline=time.monotonic()+chat.turns.policy()['detail_budget_seconds']
     for item in items:
@@ -42,6 +45,7 @@ def prepare(chat,grant,data,cancel,*,forward_session_id=None):
                 read_call=dict(tool='read_chat_image',arguments=dict(session_id=sid,event_id=item['id'],index=index)))
             if cancel.is_set():entry['state']='cancelled'
             elif not grant['scope'].get('chat_images'):entry['state']='permission_denied'
+            elif lazy:entry['state']='on_demand'
             elif attempts>=8:entry['state']='image_limit'
             elif time.monotonic()>=deadline:entry['state']='budget_exhausted'
             elif not chat.media.slots.acquire(blocking=False):entry['state']='media_busy'
@@ -82,9 +86,9 @@ def prepare(chat,grant,data,cancel,*,forward_session_id=None):
         if entry['state']=='pixels_delivered':entry.pop('read_call',None)
     packet['materials']=dict(images=entries,
         incomplete=bool(packet.get('has_more') or packet.get('context',{}).get('has_more') or
-            any(e['state']!='pixels_delivered' for e in entries) or
+            any(e['state'] not in ('pixels_delivered','on_demand') for e in entries) or
             any(incomplete(item) for item in items)),
-        note='有 has_more/next_call 继续保留页；有 read_call 仅补对应项，硬截断/循环/缺编号不重复读；混合项目分别处理。'+
+        note=('图片按需交付；谈论或判断画面前先调用对应read_call读取真实像素；无关图片可不读，不能猜。' if lazy else '')+'有 has_more/next_call 继续保留页；有 read_call 仅补对应项，硬截断/循环/缺编号不重复读；混合项目分别处理。'+
              (IMAGE_DELIVERY_NOTE if images else '本次没有交付图片块；失败状态和对应入口见各项。'))
     delivered={(e['event_id'],e.get('image_index')) for e in entries if e['state']=='pixels_delivered'}
     pending={(e['event_id'],e.get('image_index')) for e in entries}

@@ -41,7 +41,7 @@ def schemas(tool):
     sid = dict(session_id=dict(type='string', minLength=32, maxLength=32,description='原样复制返回的字符串；JSON 中必须加双引号。'))
     key = dict(idempotency_key=dict(type='string', minLength=8, maxLength=80))
     rows = [
-        tool('list_chat_personas', '实时扫描持续群聊人格目录，返回当前可用人格数量 count、名称、id、全文及读取问题。每次新开群聊前调用，文件新增、修改、删除立即生效，无需重启。将选中的 id 传给 start_chat_session.persona_preset；不会开启聊天。', {}, []),
+        tool('list_chat_personas', '实时扫描人格目录，默认摘要；full 按需全文。选中的 id 传 persona_preset，start/get 会交付所选人格全文。', dict(response_format=dict(type='string',enum=['compact','full'],default='compact')), []),
         tool('list_chat_groups', '从 OneBot 列出当前连接允许持续聊天的 QQ 群，返回准确 conversation_id；无需导入历史聊天。',
              dict(offset=dict(type='integer',minimum=0,default=0)), []),
         tool('list_chat_friends', '列出本连接授权的已核对 QQ 好友会话，使用 ACCOUNT:direct:QQ 开始私聊；不包含临时会话。',
@@ -49,13 +49,15 @@ def schemas(tool):
         tool('start_chat_session', '用户要求在指定授权 QQ 群或已核对好友私聊持续聊天时开启并自动边聊边学，仅当前账号和群，沿用此前暂停偏好，不读历史。先 list_chat_sessions 查同目标；同人格用 get_chat_session(compact) 接续。明确换人格时停止旧会话再用新编号开始。没有可接续会话时 list_chat_personas 查询最新人格，再用其 id 作为 persona_preset；也可填写自定义 persona。新会话保存人格快照，同连接同会话同人格已运行时接续。返回后直接持续执行 next_call/wait；silence 不结束循环，learning_ready 推进一个阶段后按 next_call 先聊天或回 wait，无需用户另给学习指令。需要持续聊天和发送权限。',
              dict(conversation_id=dict(type='string', maxLength=120), persona=dict(type='string', maxLength=6000),
                   response_format=dict(type='string',enum=['compact','full'],default='compact',description='默认完整交付人格/规则一次；full 保留完整排查结构。'),
+                  known_static_version=dict(type='string',maxLength=64,description='仅传已完整缓存的人格/行为static_version；相同人格跨群不重复交付全文。'),
                   persona_preset=dict(type='string', maxLength=255, description='list_chat_personas 返回的 id，即 Markdown 文件名去掉 .md；支持中文。不要凭旧列表猜测。'),
                   participation=dict(type='string', enum=['quiet','natural','active'], default='natural'), **key),
              ['conversation_id','idempotency_key']),
         tool('get_chat_session', '读取持续聊天上下文和进度；恢复时沿用 recovery 参数直接获取精简结果，full 可读取完整人格和协议。不会启动模型或自动发送。',
-             dict(**sid,response_format=dict(type='string',enum=['compact','full'],default='full'),
-                  known_prompt_version=dict(type='string',maxLength=120)), ['session_id']),
-        tool('list_chat_sessions', '列出本连接的持续聊天会话，用于接续或停止。', {}, []),
+             dict(**sid,response_format=dict(type='string',enum=['compact','full'],default='compact'),
+                  known_prompt_version=dict(type='string',maxLength=120),known_static_version=dict(type='string',maxLength=64,description='仅传本Agent已完整读取并缓存的static_version，相同人格可跨群复用。')), ['session_id']),
+        tool('list_chat_sessions', '默认活跃会话摘要；include_stopped 查历史，full 按需全文。首次 get 读取人格，目录不重复提供。',
+             dict(response_format=dict(type='string',enum=['compact','full'],default='compact'),include_stopped=dict(type='boolean',default=False),offset=dict(type='integer',minimum=0,default=0),limit=dict(type='integer',minimum=1,maximum=100,default=50)), []),
         tool('read_owner_command', '校验已读取的主人原始文字请求，普通自然语言或 /tulpa 均可，返回本人原文和 owner_proof。只依据真实发送者及服务端状态；其他群友、引用冒充、过期或撤回消息被拒绝。引用/媒体只作资料，不当作本人指令。不会执行操作；Agent判断原文是否有任务后选工具参数，受控调用携带来源证据。',
              dict(**sid,event_id=dict(type='integer',minimum=1)), ['session_id','event_id']),
         tool('read_chat_forward', '分页读取当前已读事件的直接转发或引用原文内转发。优先使用已有内容；仅未完成项沿 read_call/next_call 原样读取，引用位置使用返回的 reply_index。节点内图片用父 event_id 和 image_index；unrecoverable_truncation 表示处理上限之外无法继续。',
@@ -64,7 +66,7 @@ def schemas(tool):
                   offset=dict(type='integer',minimum=0,maximum=50,default=0),limit=dict(type='integer',minimum=1,maximum=50,default=50)),
              ['session_id','event_id']),
         tool('wait_chat_messages', '统一等待群消息或可执行的 learning_ready。消息优先；潜水/silence 也要确认上批并继续等待。learning_ready 时领取一个阶段；claim 返回 task 时独立模型调用后沿 task.submit_call 提交。claim/submit 附 updated_chat 时沿 next_call 先聊天；未领取任务或已提交且无附带聊天时回本工具。idle/冷却/预算暂停继续等待，不结束、不忙轮询。确认上批用 acknowledge_through_id。无需用户手动领取任务。',
-             dict(**sid, acknowledge_through_id=dict(type='integer', minimum=0), note=dict(type='string', maxLength=1500),
+             dict(**sid,silence_batch_id=dict(type='string',minLength=32,maxLength=32,description='已读且决定沉默的批次id，经原Planner确认并ACK，无发送。有未决计划不可用。'),acknowledge_through_id=dict(type='integer', minimum=0), note=dict(type='string', maxLength=1500),
                   known_prompt_version=dict(type='string', maxLength=120),
                   response_format=dict(type='string',enum=['compact','full'],default='compact',description='默认只返回动态参与信息；完整人格和规则由 start/get 提供。排查时可选 full。'),
                   timeout_seconds=dict(type='number', minimum=0, maximum=180, default=150),
@@ -73,14 +75,16 @@ def schemas(tool):
                   limit=dict(type='integer', minimum=1, maximum=50, default=30)), ['session_id']),
         tool('wait_chat_messages_many', '同时等待本连接1至8个已开启会话；任一群就绪即返回，不被空闲群拖延。results 可只含一个群，各群保留完整 Planner/learning/materials 与 next_call。完成群内动作后按顶层 next_call 继续多群等待，未返回群下次继续；只确认各群实际处理完的 read_through_id。默认立即交付，timeout_seconds=0 不等待。不会开启会话或发送消息。',
              dict(session_ids=dict(type='array',minItems=1,maxItems=8,uniqueItems=True,items=dict(type='string',minLength=32,maxLength=32)),
+                  wait_state_id=dict(type='string',minLength=32,maxLength=32,description='原样沿用next_call的等待状态，绑定本连接，省去反复传8群参数；重启过期时用session_ids恢复。'),
                   acknowledge_through_ids=dict(type='object',maxProperties=8,additionalProperties=dict(type='integer',minimum=0)),
                   known_prompt_versions=dict(type='object',maxProperties=8,additionalProperties=dict(type='string',maxLength=120)),
                   notes=dict(type='object',maxProperties=8,additionalProperties=dict(type='string',maxLength=1500)),
+                  silence_batches=dict(type='object',maxProperties=8,additionalProperties=dict(type='string',minLength=32,maxLength=32),description='明确决定沉默的session_id→已读batch_id，合并原Planner确认和ACK，无发送。'),
                   response_format=dict(type='string',enum=['compact','full'],default='compact'),
                   timeout_seconds=dict(type='number',minimum=0,maximum=180,default=150),
                   minimum_wait_seconds=dict(type='number',minimum=0,maximum=30,default=0),
                   quiet_seconds=dict(type='number',minimum=0,maximum=5,default=0),
-                  limit=dict(type='integer',minimum=1,maximum=50,default=30)), ['session_ids']),
+                  limit=dict(type='integer',minimum=1,maximum=50,default=30)), []),
         tool('send_chat_message', '在持续群聊中发言，默认普通文本。可分别指定回应事件、显示原生引用和原生 @；近距离且对象明确时不挂标记，话题交错时按需引用，确需点名才 @。分成多条通常仅首条挂标记，后续省略。每次核对授权、目标、停止状态和幂等编号；已授权后直接发送。',
              dict(**sid, **key, text=dict(type='string', minLength=1, maxLength=4000, description='实际正文，CQ 样式文字保持普通文本，不要手写 CQ 或 @昵称冒充消息段。'),
                   mention_all=dict(type='boolean',default=False,description='用户明确要求群公告时使用真实 @全体；仅当前管理员且群与账号均有额度时发送。'),
@@ -247,11 +251,12 @@ class MCPChat:
         with self.access.connect() as db:
             db.execute('UPDATE chat_sessions SET last_contact=? WHERE id=? AND active=1', (time.time(),sid))
 
-    def listed(self, gid=None):
+    def listed(self, gid=None, *, summary=False, include_stopped=True, offset=0, limit=100):
         with self.access.connect() as db:
             where, args = ('WHERE s.grant_id=?', [gid]) if gid else ('', [])
+            if not include_stopped:where+=(' AND ' if where else 'WHERE ')+'s.active=1'
             rows = [dict(r) for r in db.execute(f'''SELECT s.*,g.name connection_name FROM chat_sessions s
-                      JOIN grants g ON s.grant_id=g.id {where} ORDER BY s.active DESC,s.updated DESC LIMIT 100''', args)]
+                      JOIN grants g ON s.grant_id=g.id {where} ORDER BY s.active DESC,s.updated DESC LIMIT ? OFFSET ?''', args+[limit,offset])]
         out=[]
         for row in rows:
             if row['active']:
@@ -263,7 +268,9 @@ class MCPChat:
                     row=self.row(row['id'])|{'connection_name':row['connection_name']}
                 except ValueError:
                     self.stop(row['id'],reason='会话范围已失效');row=self.row(row['id'])|{'connection_name':row['connection_name']}
-            out.append(dict(self.public(row),connection_name=row['connection_name']))
+            item=dict(self.public(row),connection_name=row['connection_name'])
+            if summary:item={k:v for k,v in item.items() if k not in ('persona','receiver','gap_note','source','execution','expires_at','created','updated','last_agent_contact','waiting','stop_reason')}
+            out.append(item)
         return out
 
     def messages(self, rows):
@@ -494,14 +501,14 @@ class MCPChat:
             old=db.execute('SELECT * FROM chat_sessions WHERE grant_id=? AND request_key=?',(grant['id'],args['idempotency_key'])).fetchone()
         if old:
             if old['signature']!=signature:raise ValueError('同一个开始编号不能用于不同人格或会话。')
-            return self.get(grant,old['id'],args.get('response_format','compact'))
+            return self.get(grant,old['id'],args.get('response_format','compact'),known_static_version=args.get('known_static_version'))
         with self.access.connect() as db:
             active=db.execute('SELECT * FROM chat_sessions WHERE grant_id=? AND conversation_id=? AND active=1',(grant['id'],cid)).fetchone()
         # Resolve after the retry lookup: removing a file must not break a
         # previously accepted request or replace its saved persona snapshot.
         resolved=prompts.resolve_persona_details(custom,preset)
         persona=resolved['prompt']
-        if active and active['signature']==signature and active['persona']==persona:return self.get(grant,active['id'],args.get('response_format','compact'))
+        if active and active['signature']==signature and active['persona']==persona:return self.get(grant,active['id'],args.get('response_format','compact'),known_static_version=args.get('known_static_version'))
         target=self.live_target(grant,cid)
         from .message_sender import qq_address
         plan=self.access.plan(grant)
@@ -536,10 +543,10 @@ class MCPChat:
                     old=db.execute('SELECT * FROM chat_sessions WHERE grant_id=? AND request_key=?',(grant['id'],args['idempotency_key'])).fetchone()
                 if old and old['signature']==signature:sid=old['id']
                 else:raise ValueError('这个群已有持续聊天会话，请先接续或停止原会话，避免重复发言。') from None
-        return self.get(grant,sid,args.get('response_format','compact'))
+        return self.get(grant,sid,args.get('response_format','compact'),known_static_version=args.get('known_static_version'))
 
     @timing.stage('chat.get')
-    def get(self, grant, sid, response_format='full', known_prompt_version=None):
+    def get(self, grant, sid, response_format='full', known_prompt_version=None, known_static_version=None):
         grant,row=self.validate(sid,grant['id'],active=False)
         self.touch(sid)
         result=dict(instructions=CHAT_INSTRUCTIONS)
@@ -557,7 +564,7 @@ class MCPChat:
         result['recent_turns']=[self.turns.public(dict(p)) for p in plans]
         if response_format=='compact':
             from .mcp_chat_output import compact_recovery
-            result=compact_recovery(result,known_prompt_version)
+            result=compact_recovery(result,known_prompt_version,known_static_version)
         return result
 
     def read_context(self,grant,row,recovery=False,cancel=None):
@@ -626,13 +633,20 @@ class MCPChat:
 
     @timing.stage('chat.wait_many')
     def wait_many(self, grant, args, cancel, *, allow_learning=True):
+        if args.get('wait_state_id'):
+            with self.lock:
+                saved=getattr(self,'wait_states',{}).get(args['wait_state_id'])
+            if not saved or saved[0]!=grant['id'] or time.time()-saved[1]>1800:
+                raise ValueError('等待状态已过期；用原session_ids与实际处理进度恢复，不重发消息。')
+            args=dict(saved[2],**{k:v for k,v in args.items() if k!='wait_state_id'})
+        if 'session_ids' not in args:raise ValueError('提供session_ids或返回的wait_state_id。')
         sids=args['session_ids']
         if not sids or len(sids)>8 or len(set(sids))!=len(sids):
             raise ValueError('请选择1至8个不同的聊天会话。')
         acknowledgements=args.get('acknowledge_through_ids',{})
         versions=args.get('known_prompt_versions',{})
         notes=args.get('notes',{})
-        if any(set(values)-set(sids) for values in (acknowledgements,versions,notes)):
+        if any(set(values)-set(sids) for values in (acknowledgements,versions,notes,args.get('silence_batches',{}))):
             raise ValueError('进度、话题说明与提示版本只能属于本次等待的会话。')
         common={key:args[key] for key in ('timeout_seconds','minimum_wait_seconds','quiet_seconds','limit','response_format') if key in args}
         per_session=[]
@@ -645,6 +659,11 @@ class MCPChat:
         # A continuation carries only cursors actually acknowledged in this call.
         # The caller adds the returned session's cursor after completing its plan.
         continuation=dict(args)
+        continuation.pop('silence_batches',None)
+        if any(packet.get('chat_prompt') for packet in results):continuation['known_prompt_versions']=dict(continuation.get('known_prompt_versions',{}))
+        for packet in results:
+            if packet.get('chat_prompt'):
+                continuation.setdefault('known_prompt_versions',{})[packet['session_id']]=packet['chat_prompt']['prompt_version']
         terminal={r['session_id'] for r in results if r.get('event') in ('stopped','service_offline')}
         if terminal:
             continuation['session_ids']=[sid for sid in sids if sid not in terminal]
@@ -653,7 +672,15 @@ class MCPChat:
         result=dict(event=results[0]['event'],results=results,continue_waiting=bool(continuation['session_ids']),
                     note='本次可只返回一个就绪群；先处理该群 next_call，完成后仅确认该群进度，再按顶层 next_call 等待其余群。')
         if result['continue_waiting']:
-            result['next_call']=dict(tool='wait_chat_messages_many',arguments=continuation)
+            from .mcp_efficiency import policy
+            if policy(self.access)['enabled'] and args.get('response_format','compact')=='compact':
+                with self.lock:
+                    if not hasattr(self,'wait_states'):self.wait_states={}
+                    while len(self.wait_states)>=64:self.wait_states.pop(next(iter(self.wait_states)))
+                    state_id=uuid.uuid4().hex
+                    self.wait_states[state_id]=(grant['id'],time.time(),continuation)
+                result['next_call']=dict(tool='wait_chat_messages_many',arguments=dict(wait_state_id=state_id))
+            else:result['next_call']=dict(tool='wait_chat_messages_many',arguments=continuation)
         return result
 
     def _wait_sessions(self, grant, requests, args, cancel, *, allow_learning):
@@ -686,6 +713,23 @@ class MCPChat:
                 if 'note' in item and ack is None:
                     raise ValueError('保存话题说明时请同时确认已处理的消息进度。')
             if cancel.is_set():return [dict(event='cancelled',session_id=sids[0],messages=[])]
+            silences=args.get('silence_batches',{}) if 'session_ids' in args else ({sids[0]:args['silence_batch_id']} if args.get('silence_batch_id') else {})
+            # Validate every silence before any cursor is advanced. No operation
+            # can dispatch here; actual sends still require a READY plan.
+            for sid,batch in silences.items():
+                with self.access.connect() as db:
+                    found=db.execute('SELECT * FROM chat_input_batches WHERE id=? AND session_id=?',(batch,sid)).fetchone()
+                    busy=db.execute("SELECT 1 FROM chat_turn_plans WHERE session_id=? AND state IN ('READY','WAITING','SENDING','UNKNOWN')",(sid,)).fetchone()
+                row=self.row(sid,gid)
+                if busy or not found or found['epoch']!=self.turns.epoch or time.time()-found['created']>self.turns.policy()['batch_ttl_seconds'] or found['watermark']>row['offered']:
+                    raise ValueError('静默批次无效、过期或存在未决计划；请读取当前会话。')
+            for item in requests:
+                batch=silences.get(item['session_id'])
+                if batch:
+                    if cancel.is_set():return [dict(event='cancelled',session_id=item['session_id'],messages=[])]
+                    planned=self.turns.plan(grant,dict(session_id=item['session_id'],batch_id=batch,action='silence',intent='已读本批，决定沉默',idempotency_key='silence-'+batch),cancel,settle_only=True)
+                    if planned.get('state')!='SILENT':raise ValueError('静默确认失败，请读取当前会话。')
+                    item['acknowledge_through_id']=planned['decision']['watermark']
             for item in requests:self._wait_ack(grant,item)
             deadline=time.monotonic()+args.get('timeout_seconds',150)
             ordered=requests[offset:]+requests[:offset]
@@ -902,7 +946,10 @@ class MCPChat:
             from .mcp_owner import OwnerGate
             if cancel.is_set():raise ValueError('调用已取消。')
             return OwnerGate(self.access).read_command(grant,args['session_id'],args['event_id'])
-        if name=='list_chat_personas':return dict(prompts.persona_catalog(),note='本次已重新扫描人格目录。新会话使用最新文件，已开启会话保留快照。仅持续群聊使用；不改变普通问答或回复助手。persona 可补充预设，也可以独立使用自定义人格。')
+        if name=='list_chat_personas':
+            catalog=prompts.persona_catalog()
+            if args.get('response_format','compact')!='full':catalog['personas']=[{k:v for k,v in p.items() if k!='prompt'} for p in catalog['personas']]
+            return catalog
         if name in ('list_chat_groups','list_chat_friends'):
             client=self.actions.client_factory(timeout=4);account=client.login()
             group=name=='list_chat_groups';field='group_id' if group else 'user_id'
@@ -916,9 +963,12 @@ class MCPChat:
             offset=args.get('offset',0)
             return dict(items=allowed[offset:offset+100],has_more=len(allowed)>offset+100,next_offset=offset+100)
         if name=='start_chat_session':return self.start(grant,args,cancel)
-        if name=='get_chat_session':return self.get(grant,args['session_id'],args.get('response_format','full'),args.get('known_prompt_version'))
+        if name=='get_chat_session':return self.get(grant,args['session_id'],args.get('response_format','compact'),args.get('known_prompt_version'),args.get('known_static_version'))
         if name=='read_chat_forward':return self.details.read(grant,args,cancel)
-        if name=='list_chat_sessions':return dict(sessions=self.listed(grant['id']))
+        if name=='list_chat_sessions':
+            limit=args.get('limit',50);offset=args.get('offset',0)
+            sessions=self.listed(grant['id'],summary=args.get('response_format','compact')!='full',include_stopped=args.get('include_stopped',False),offset=offset,limit=limit+1)
+            return dict(sessions=sessions[:limit],has_more=len(sessions)>limit,next_offset=offset+limit if len(sessions)>limit else None,receiver=self.receiver.status())
         if name=='stop_chat_session':return self.stop(args['session_id'],grant['id'])
         if name=='wait_chat_messages':return self.wait(grant,args,cancel)
         if name=='wait_chat_messages_many':return self.wait_many(grant,args,cancel)

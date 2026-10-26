@@ -9,8 +9,8 @@ const html=fs.readFileSync(path.join(root,'web/mcp-home.html'),'utf8').replace('
  const browser=await chromium.launch({channel:process.env.PLAYWRIGHT_CHANNEL||'msedge',headless:true});
  try{
   const page=await browser.newPage({viewport:{width:1180,height:900}}),errors=[],writes=[];
-  page.on('pageerror',e=>errors.push(e.message));let connections=[],seq=0,history={},enabled=false,account='111',fail=false;
-  const snapshot=()=>({enabled,running:enabled,port:18777,url:'http://127.0.0.1:18777/mcp',error:'',data_platforms:history,onebot_configured:true,connections,recent:[]});
+  page.on('pageerror',e=>errors.push(e.message));let connections=[],seq=0,history={},enabled=false,account='111',fail=false,efficient=false;
+  const snapshot=()=>({enabled,running:enabled,port:18777,url:'http://127.0.0.1:18777/mcp',error:'',data_platforms:history,onebot_configured:true,connections,recent:[],efficiency:{enabled:efficient}});
   const group=a=>({account:a,group:'222',name:a==='111'?'合成群 A':'合成群 B',conversation_id:a+':group:222',active:[],history:[]});
   const library={enabled:true,hourly_call_budget:20,independence:'degraded',library:{checked_expressions:4,pending_expressions:0,known_jargon:1,observing_jargon:2,last_completed_at:null},run:{completed_batches:0,buffered:0},expression_count:1,jargon_count:0,expressions:[{id:'e',situation:'合成群友在分享好消息时',style:'一串非常长的合成表达'.repeat(35),count:1,enabled:true,evidence_version:2,surface_form:'合成原文'}],jargon:[]};
   await page.route('http://127.0.0.1:39879/**',async route=>{
@@ -33,6 +33,7 @@ const html=fs.readFileSync(path.join(root,'web/mcp-home.html'),'utf8').replace('
    if(connection&&u.pathname.endsWith('/groups')&&method==='GET')return reply({revision:String(connection.revision),scope:connection.scope,items:[{group_id:'222',name:'合成实时群',authorized:true},{group_id:'444',name:'合成新群',authorized:false}]});
    if(connection&&u.pathname.endsWith('/owner')&&method==='GET')return reply(connection.owner||{enabled:false,owner_qq:'',revision:0});
    let b={};if(r.postData())b=r.postDataJSON();writes.push({url:u.pathname,method,body:b});
+   if(u.pathname==='/api/mcp/efficiency'&&method==='PUT'){efficient=b.enabled;return reply({enabled:efficient});}
    if(connection&&u.pathname.endsWith('/owner')&&method==='PUT'){connection.owner={...b,revision:b.expected_revision+1};return reply(connection.owner);}
    if(connection&&u.pathname.endsWith('/pokes')&&method==='POST'){assert.equal(b.revision,String(connection.revision));connection.scope.chat_poke=b.enabled;connection.revision++;return reply({enabled:b.enabled});}
    if(connection&&u.pathname.endsWith('/groups')&&method==='POST'){assert.equal(b.revision,String(connection.revision));assert.deepEqual(b.group_ids,['444']);connection.scope.conversations.push(['qq','111:group:444']);connection.revision++;return reply({added:[{group_id:'444',name:'合成新群'}]});}
@@ -93,6 +94,9 @@ const html=fs.readFileSync(path.join(root,'web/mcp-home.html'),'utf8').replace('
   await page.keyboard.press('Escape');await page.keyboard.press('Escape');await page.locator('#home-connect').click();await page.locator('#mcp-module-qq').check();await shot('06-narrow-QQ');
   assert.ok(await page.locator('#mcp-settings').evaluate(e=>e.scrollWidth<=e.clientWidth+1));await page.keyboard.press('Escape');
   await page.locator('#open-bilibili').click();await page.locator('#bili-login-qr').waitFor();assert.equal(new URL(page.url()).pathname,'/');await page.keyboard.press('Escape');
+  await page.locator('#open-service-settings').click();await page.locator('#mcp-efficiency').check();
+  await page.waitForResponse(r=>r.url().endsWith('/api/mcp')&&r.request().method()==='GET');
+  assert.equal(efficient,true);assert.deepEqual(writes.findLast(w=>w.url.endsWith('/efficiency')).body,{enabled:true});
   assert.deepEqual(errors,[]);assert.equal(writes.some(w=>/chats\/start|send_group|install|managed\/start/.test(w.url)),false);
   console.log('PASS: actual frontend assets; compact/collapsible home; three independent modules; no-history QQ/Bilibili create; random name; pause/resume/reload/delete; QQ-account/group library; edit; QR modal; narrow screens; no external writes.');
  }finally{await browser.close();}

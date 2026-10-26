@@ -20,6 +20,7 @@
     "scripts/check_fork_scope_edit.py",
     "scripts/check_fork_permissions.py",
     "scripts/check_fork_owner_gate.py",
+    "scripts/check_fork_token_efficiency.py",
     "scripts/check_mcp_downloads.py",
     "scripts/check_mcp_qq_extensions.py",
     "scripts/check_mcp_history_optional.py",

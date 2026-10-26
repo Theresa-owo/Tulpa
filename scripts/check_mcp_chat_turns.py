@@ -576,7 +576,7 @@ def main():
                     assert tools.chat.row(sid)['cursor']>=human['read_through_id']
                     recent=read()['recent_turns'];assert recent[0]['plan_id']==p['plan_id'] and recent[0]['state']=='SUCCEEDED'
                     assert next(t for t in recent if t['plan_id']==unknown_plan)['state']=='UNKNOWN'
-                    full=read();compact=call('get_chat_session',session_id=sid,response_format='compact',known_prompt_version=full['session']['prompt_version'])
+                    full=call('get_chat_session',session_id=sid,response_format='full');compact=call('get_chat_session',session_id=sid,response_format='compact',known_prompt_version=full['session']['prompt_version'])
                     complete=next(t for t in compact['recent_turns'] if t['plan_id']==p['plan_id'])
                     assert 'expression_selection' not in complete and all('receipt' not in b for b in complete['bubble_states'])
                     assert full['recent_turns'][0]['bubbles'][0]['receipt']['state']=='SUCCEEDED'

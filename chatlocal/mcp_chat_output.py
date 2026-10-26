@@ -3,6 +3,19 @@
 Static behavior, persona and capability catalogs are delivered by start/get.
 Polling sends dynamic state only, with no message truncation or cursor changes.
 """
+import hashlib
+import json
+
+
+def messages(items):
+    """Drop only exact duplicate plain text; never truncate or flatten media."""
+    result=[]
+    for original in items:
+        m=dict(original);segments=m.get('segments',[])
+        if segments and all(s.get('type')=='text' for s in segments) and ''.join(s.get('text','') for s in segments)==m.get('content'):
+            m.pop('segments',None)
+        result.append(m)
+    return result
 
 
 def compact_wait(data,known_prompt_version=None):
@@ -40,6 +53,7 @@ def compact_wait(data,known_prompt_version=None):
     learning=full.get('language_learning')
     if learning:guidance['language_learning']={k:learning[k] for k in ('enabled','automatic') if k in learning}
     result={k:v for k,v in data.items() if k not in ('chat_guidance','note')}
+    if 'messages' in result:result['messages']=messages(result['messages'])
     result['chat_guidance']=guidance
     if 'receiver' in result:
         receiver=result['receiver']
@@ -57,9 +71,12 @@ def compact_wait(data,known_prompt_version=None):
     return result
 
 
-def compact_recovery(data,known_prompt_version=None):
+def compact_recovery(data,known_prompt_version=None,known_static_version=None):
     """Keep live recovery evidence; completed receipts have full-read IDs."""
     result=dict(data);session=dict(data['session']);prompt=data.get('chat_prompt',{})
+    static={k:prompt[k] for k in ('persona','behavior') if k in prompt}
+    static_version=hashlib.sha256(json.dumps(static,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+    result['static_version']=static_version
     changed=not known_prompt_version or known_prompt_version!=session.get('prompt_version')
     result['prompt_changed']=changed
     session.pop('persona',None)  # Full refreshed persona is in chat_prompt once.
@@ -67,9 +84,13 @@ def compact_recovery(data,known_prompt_version=None):
         result.pop('instructions',None)
         dynamic=compact_wait(dict(event='messages',decision_required=True,chat_guidance=prompt),known_prompt_version)['chat_guidance']
         result['chat_prompt']=dynamic
+    elif known_static_version==static_version:
+        result['chat_prompt']={k:v for k,v in prompt.items() if k not in ('persona','behavior')}
+        result.pop('instructions',None)
     result['session']=session
     result['full_read']=dict(tool='get_chat_session',arguments=dict(session_id=session['id'],response_format='full'))
     context=result.get('context',{})
+    if 'messages' in context:result['context']=dict(context,messages=messages(context['messages']))
     result['next_call']=context.get('next_call') if context.get('has_more') else result.get('input_batch',{}).get('plan_call') if context.get('messages') else prompt.get('continue_with')
     if 'recent_operations' in result:
         result['recent_operations']=[dict({k:op[k] for k in ('id','kind','state','created','updated') if k in op},

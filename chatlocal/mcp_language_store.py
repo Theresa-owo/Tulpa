@@ -333,6 +333,18 @@ class LanguageStore:
         if db.execute("SELECT count(*) FROM jobs WHERE state='leased' AND lease_until>?",(now,)).fetchone()[0]>=3:
             return dict(ready=False,reason='capacity',next_at=now+2)
         calls=db.execute('SELECT at FROM calls WHERE scope=? AND at>? ORDER BY at',(b['scope'],now-3600)).fetchall()
+        efficiency=getattr(self,'efficiency',None)
+        if efficiency:
+            cfg_eff=efficiency()
+            if cfg_eff['enabled']:
+                # Shared across all eight groups; claim rechecks under the same
+                # store transaction, not just when a wake hint is generated.
+                global_calls=db.execute('SELECT at FROM calls WHERE at>? ORDER BY at',(now-3600,)).fetchall()
+                if len(global_calls)>=cfg_eff['learning_hourly_calls']:
+                    return dict(ready=False,reason='global_budget',next_at=global_calls[-cfg_eff['learning_hourly_calls']][0]+3600+.01)
+                latest=db.execute('SELECT max(at) FROM calls WHERE scope=?',(b['scope'],)).fetchone()[0]
+                if latest and latest+cfg_eff['learning_interval_seconds']>now:
+                    return dict(ready=False,reason='learning_interval',next_at=latest+cfg_eff['learning_interval_seconds'])
         if len(calls)>=cfg['hourly_calls']:
             return dict(ready=False,reason='budget',next_at=calls[len(calls)-cfg['hourly_calls']][0]+3600+.01)
         values=tuple(b[k] for k in ('scope','gid','sid','epoch'))

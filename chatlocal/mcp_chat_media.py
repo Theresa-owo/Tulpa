@@ -77,6 +77,7 @@ def schemas(tool, scope):
              dict(**sid, data_base64=dict(type='string', minLength=4, maxLength=MAX_BASE64_LENGTH)), ['session_id', 'data_base64']),
         tool('read_chat_image', '读取当前持续聊天事件中的图片/表情包，直接向外部模型返回像素；动图最多3个采样帧。event_id 是 wait_chat_messages 的 id，index 是 image_index。未看图不可猜内容。',
              dict(**sid, event_id=dict(type='integer', minimum=1), index=dict(type='integer', minimum=0, maximum=7, default=0),
+                  max_frames=dict(type='integer',minimum=1,maximum=3,default=3,description='需要动画变化时用3；只需首帧可设1降低视觉输入，不能据此推断完整动画。'),
                   prefer_original=dict(type='boolean',default=False,description='仅已有像素清晰度不足时补原件；客户端完全看不到图片不适用，也不保证有原图。')), ['session_id', 'event_id']),
         tool('list_chat_stickers', '分页查表情。source=library 搜本连接已看图笔记（无网络）；默认 qq 查 QQ 收藏。只有 sendable=true 的本地哈希验证图可直接发送；未知图先 read_chat_sticker。',
              dict(**sid, query=dict(type='string', maxLength=100), offset=dict(type='integer', minimum=0, default=0), refresh=dict(type='boolean', default=False), source=dict(type='string',enum=['qq','library'],default='qq')), ['session_id']),
@@ -752,6 +753,11 @@ class ChatMedia:
         aid=self.upsert(sid,f'event:{args["event_id"]}:{args.get("index",0)}',ref)
         result,frames=self.read(grant,row,aid,'read_chat_image',cancel,remember=remember,prefer_original=args.get('prefer_original',False))
         if self.event_reference(sid,args)!=ref:raise ValueError('图片所属消息已变化，未交付像素。')
+        limit=args.get('max_frames',3)
+        if len(frames)>limit:
+            result=dict(result,delivered_frame_limit=limit,more_sampled_frames=True,frame_note='仅交付所选采样帧；需要动画变化时以max_frames=3补读，不能推断未见动作。')
+            if 'frame_indices' in result:result['frame_indices']=result['frame_indices'][:limit]
+            frames=frames[:limit]
         return result,frames
 
     def event_reference(self,sid,args):

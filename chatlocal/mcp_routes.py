@@ -49,7 +49,18 @@ def install_mcp_routes(app, store=None):
         from .desktop_routes import read_product_settings
         settings=read_product_settings()
         return dict(**service.status(), **access.list(), storage_label=store.path.parent.parent.name,
-                    data_platforms=platforms, onebot_configured=bool(settings['sender_url']))
+                    data_platforms=platforms, onebot_configured=bool(settings['sender_url']),efficiency=__import__('chatlocal.mcp_efficiency',fromlist=['policy']).policy(access))
+
+    @app.put('/api/mcp/efficiency')
+    def efficiency_settings(request: Request, body: dict):
+        local(request,True)
+        if set(body)!={'enabled'} or type(body['enabled']) is not bool:raise HTTPException(400,'Token设置无效。')
+        from .mcp_efficiency import policy
+        from .snowluma_secure import atomic_bytes
+        import json
+        cfg=dict(policy(access),enabled=body['enabled'])
+        atomic_bytes(access.path.parent/'mcp-efficiency.json',json.dumps(cfg).encode())
+        return cfg
 
     @app.put('/api/mcp')
     def configure(request: Request, body: dict):

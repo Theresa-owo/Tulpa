@@ -356,7 +356,7 @@ class ChatTurns:
                 raise TurnRejected('reply_cooldown','上一轮表达刚结束，请留出接话空隙。',wait_seconds=round(policy['reply_cooldown_seconds']-(now-prev),2))
 
     @timing.stage('turn.plan')
-    def plan(self,grant,args,cancel):
+    def plan(self,grant,args,cancel,*,settle_only=False):
         sid=args['session_id'];self.chat.validate(sid,grant['id'])
         args=dict(args)
         if 'idempotency_key' not in args:
@@ -368,6 +368,8 @@ class ChatTurns:
             with self.access.connect() as db:
                 old=db.execute('SELECT * FROM chat_turn_plans WHERE session_id=? AND request_key=?',(sid,args['idempotency_key'])).fetchone()
                 batch=db.execute('SELECT * FROM chat_input_batches WHERE id=? AND session_id=?',(args['batch_id'],sid)).fetchone()
+                if settle_only and db.execute("SELECT 1 FROM chat_turn_plans WHERE session_id=? AND state IN ('READY','WAITING','SENDING','UNKNOWN')",(sid,)).fetchone():
+                    raise TurnRejected('unsettled_plan','先核对当前未决计划，不能合并静默。')
             if old:
                 if old['signature']!=signature:raise TurnRejected('idempotency_conflict','计划编号已用于另一决定。')
                 return self.public(dict(old))
