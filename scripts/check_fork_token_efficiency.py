@@ -47,7 +47,14 @@ async def transport(service,token,sids,configure):
                 assert all('persona' not in s for s in data(result)['sessions'])
                 from chat_bridge import bootstrap,bounded
                 start=await bootstrap(client,{})
-                assert len(start['sessions'])==8 and len(start['static_contexts'])==1
+                assert len(start['sessions'])==8 and len(start['static_contexts'])==2
+                assert sum('inherits_static_version' not in c for c in start['static_contexts'].values())==1
+                for version,c in start['static_contexts'].items():
+                    if 'inherits_static_version' in c:
+                        base=start['static_contexts'][c['inherits_static_version']]
+                        rebuilt=dict(persona=base['persona']+c['persona_append'],behavior=base['behavior'])
+                        import hashlib
+                        assert hashlib.sha256(json.dumps(rebuilt,ensure_ascii=False,sort_keys=True).encode()).hexdigest()==version
                 assert all(s['static_version'] in start['static_contexts'] for s in start['sessions'])
                 assert start['recovery_required'] and 'next_call' not in start,'Pending WAITING hidden at initialization'
                 assert json.loads(bounded(start)).get('delivery')!='deferred_unread'
@@ -174,6 +181,7 @@ def main():
                     assert compact_dynamic(unknown)==unknown
                     chat.receive(dict(post_type='message',message_type='group',self_id=111,group_id=224,user_id=333,message_id=502,time=time.time(),message=[dict(type='text',data={'text':'自然接话测试'})]))
                     time.sleep(2.1)
+                    with access.connect() as db:db.execute('UPDATE chat_sessions SET persona=persona||? WHERE id=?',('\n仅该群的额外表达偏好。',sids[7]))
                     report=asyncio.run(transport(service,g['token'],sids,configure))
                     assert report['directory_optimized_chars']<report['directory_legacy_chars']*.12
                     report.update(semantic_text_preserved=True,cross_group_static_cached=True,explicit_pixels_work=True,

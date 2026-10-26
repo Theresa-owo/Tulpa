@@ -43,6 +43,16 @@ def bounded(value,maximum=16000):
         recovery='分段读取本机JSON原文；未读完不能确认消息、声称已缓存人格或根据未读内容执行操作。',ack_allowed=False),ensure_ascii=False)
 
 
+def share_static(contexts):
+    """Exact append-only sharing, never semantic summarization of a persona."""
+    out={}
+    for version,value in sorted(contexts.items(),key=lambda pair:len(pair[1]['persona'])):
+        assert hashlib.sha256(json.dumps(value,ensure_ascii=False,sort_keys=True).encode()).hexdigest()==version
+        base=next(((v,c) for v,c in out.items() if 'inherits_static_version' not in c and c['behavior']==value['behavior'] and value['persona'].startswith(c['persona'])),None)
+        out[version]=(dict(inherits_static_version=base[0],persona_append=value['persona'][len(base[1]['persona']):]) if base else value)
+    return out
+
+
 async def bootstrap(client,request):
     listing=payload(await client.call_tool('list_chat_sessions',{}))
     if listing.get('has_more'):raise ValueError('Select a bounded session scope before bootstrapping')
@@ -62,8 +72,9 @@ async def bootstrap(client,request):
         for operation in setup.get('unsettled_operations',[]):recovery.append(dict(session_id=row['id'],**operation))
         plan=setup['session'].get('turn_process',{}).get('last_plan')
         if plan and plan['state'] in ('READY','WAITING','SENDING','UNKNOWN'):recovery.append(dict(session_id=row['id'],plan=plan,read_call=dict(tool='get_chat_session',arguments=dict(session_id=row['id'],view='all',response_format='full'))))
-    result=dict(sessions=sessions,static_contexts=contexts,receiver=listing['receiver'],
+    result=dict(sessions=sessions,static_contexts=share_static(contexts),receiver=listing['receiver'],
         request_policy=policies[0] if all(p==policies[0] for p in policies) else {s['id']:p for s,p in zip(sessions,policies)},recovery_required=recovery)
+    if any('inherits_static_version' in c for c in result['static_contexts'].values()):result['static_context_rule']='继承版本的完整人格及行为，再逐字追加persona_append；此为无损共享，不是摘要。'
     if not recovery:result['next_call']=dict(tool='wait_chat_messages_many',arguments=dict(session_ids=[s['id'] for s in sessions],known_prompt_versions={s['id']:s['prompt_version'] for s in sessions},timeout_seconds=150,limit=8))
     return result
 
