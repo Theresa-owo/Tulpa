@@ -29,6 +29,8 @@ def wire_result(access,result):
 def compact_dynamic(data):
     """Compact repetitive dynamic hints; never touch source text or failures."""
     result=dict(data)
+    if result.get('request_policy'):
+        result['request_policy']={k:v for k,v in result['request_policy'].items() if k in ('owner_qq','owner_verification_enabled','identity_rule','non_owner_complex_requests','complexity_reference','prefix_required')}
     for key in ('chat_guidance','chat_prompt'):
         if key not in result:continue
         value=dict(result[key]);p=value.get('request_policy')

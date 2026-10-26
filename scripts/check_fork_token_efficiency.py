@@ -45,9 +45,15 @@ async def transport(service,token,sids,configure):
                 result=await client.call_tool('list_chat_sessions',{})
                 assert result.structuredContent is None and len(data(result)['sessions'])==8
                 assert all('persona' not in s for s in data(result)['sessions'])
+                from chat_bridge import bootstrap,bounded
+                start=await bootstrap(client,{})
+                assert len(start['sessions'])==8 and len(start['static_contexts'])==1
+                assert all(s['static_version'] in start['static_contexts'] for s in start['sessions'])
+                assert start['recovery_required'] and 'next_call' not in start,'Pending WAITING hidden at initialization'
+                assert json.loads(bounded(start)).get('delivery')!='deferred_unread'
                 payload=await client.call_tool('wait_chat_messages_many',{'session_ids':sids,'timeout_seconds':0})
                 assert payload.structuredContent is None and data(payload)['next_call']['arguments']['wait_state_id']
-                context=data(await client.call_tool('get_chat_session',dict(session_id=sids[2])))
+                context=data(await client.call_tool('get_chat_session',dict(session_id=sids[2],view='context')))
                 plan=data(await client.call_tool('plan_chat_reply',dict(session_id=sids[2],batch_id=context['input_batch']['id'],action='reply',expressions=['text'],intent='自然接话')))
                 assert plan['state']=='READY',plan
                 reply=dict(session_id=sids[2],plan_id=plan['plan_id'],expression_ids=[],bubbles=[dict(kind='text',text='收到')])
@@ -55,7 +61,7 @@ async def transport(service,token,sids,configure):
                 assert sent.structuredContent is None and data(sent)['state']=='SUCCEEDED'
                 assert data(await client.call_tool('send_chat_reply',reply))['state']=='SUCCEEDED'
                 assert len(OneBot.sent)==1,'Optimized replay duplicated a send'
-                return dict(directory_legacy_chars=len(legacy.model_dump_json()),directory_optimized_chars=len(result.model_dump_json()))
+                return dict(directory_legacy_chars=len(legacy.model_dump_json()),directory_optimized_chars=len(result.model_dump_json()),bootstrap_eight_groups_chars=chars(start),shared_persona_count=len(start['static_contexts']))
 
 
 def learning():
@@ -110,6 +116,15 @@ def main():
                     assert cached['chat_prompt']['request_policy']==first['chat_prompt']['request_policy']
                     assert chars(cached)<chars(first)*.7
                     configure(True)
+                    untouched=chat.row(sids[0])
+                    setup=chat.get(grant,sids[0],'compact')
+                    assert 'context' not in setup and 'chat_prompt' not in setup and 'input_batch' not in setup
+                    assert not setup['unsettled_operations'] and setup['next_call']['arguments']['view']=='persona'
+                    assert (chat.row(sids[0])['cursor'],chat.row(sids[0])['offered'])==(untouched['cursor'],untouched['offered'])
+                    persona=chat.get(grant,sids[0],'compact',view='persona')
+                    assert persona['static_context']['persona']==chat.row(sids[0])['persona']
+                    cached_setup=chat.get(grant,sids[1],'compact',known_static_version=persona['static_version'])
+                    assert cached_setup['next_call']['tool']=='wait_chat_messages'
                     text='很长但完整的群友原话'*500
                     chat.receive(dict(post_type='message',message_type='group',self_id=111,group_id=222,user_id=333,message_id=500,time=time.time(),message=[dict(type='text',data={'text':text})]))
                     args=dict(session_ids=sids,timeout_seconds=0,known_prompt_versions={sid:chat.public(chat.row(sid))['prompt_version'] for sid in sids})
@@ -144,6 +159,14 @@ def main():
                     except ValueError:pass
                     else:raise AssertionError('WAITING bypassed by silence')
                     assert chat.row(sids[1])['cursor']==before
+                    # Explicit context pagination remains complete and never
+                    # appends old operation bodies to ordinary message reads.
+                    for mid in range(510,530):
+                        chat.receive(dict(post_type='message',message_type='group',self_id=111,group_id=225,user_id=333,message_id=mid,time=time.time(),message=[dict(type='text',data={'text':'完整原文-'+str(mid)})]))
+                    page=chat.get(grant,sids[3],'compact',known_static_version=persona['static_version'],view='context',context_limit=3)
+                    assert len(page['context']['messages'])==3 and page['context']['has_more']
+                    assert 'recent_operations' not in page and 'recent_turns' not in page
+                    assert 'persona' not in page['chat_prompt'] and page['context']['messages'][0]['content']=='完整原文-510'
                     owner=OwnerGate(access);owner.configure(g['id'],dict(enabled=True,owner_qq='33333',expected_revision=0))
                     denied=service.tools.call(g['token'],'send_chat_reply',dict(session_id=sids[0],plan_id='0'*32,expression_ids=[],bubbles=[dict(kind='text',text='x',mention_all=True)]),cancel)
                     assert data(denied)['error_code']=='owner_required'
@@ -158,6 +181,13 @@ def main():
                         unknown_receipt_preserved=True,real_qq_writes=0,continuation_old_chars=chars(args),continuation_new_chars=chars(short))
                     print(json.dumps(report))
         learning();print('PASS: learning budget shared across groups; retained work eligible after budget release')
+        import chat_bridge
+        with tempfile.TemporaryDirectory() as bridge_tmp,patch.object(chat_bridge,'ROOT',Path(bridge_tmp)):
+            source=dict(state='UNKNOWN',owner_proof={'source':'完整授权数据'},body='完整原文'*10000)
+            deferred=json.loads(chat_bridge.bounded(source,1000))
+            assert deferred['delivery']=='deferred_unread' and deferred['ack_allowed'] is False
+            assert json.loads(Path(deferred['path']).read_text('utf-8'))==source
+        print('PASS: bounded bridge preserves oversized result verbatim and forbids ACK before reading')
     finally:events.close();upstream.shutdown();upstream.server_close()
 
 

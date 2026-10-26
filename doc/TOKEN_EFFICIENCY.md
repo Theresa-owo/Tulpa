@@ -6,6 +6,7 @@
 
 - `list_chat_sessions` 默认只列活跃会话摘要，共享 receiver，按 offset/limit 分页。`include_stopped=true` 查询旧会话，`response_format=full` 读取完整记录。目录不再反复交付人格全文。
 - `list_chat_personas` 默认仅目录；所选人格由 start/get 交付。首次读取后缓存返回的 `static_version`，其他相同人格会话可在 start/get 传 `known_static_version`；只省略哈希完全相同的人格和行为原文。动态主人身份和群状态仍交付，缓存丢失或版本变化必须补读。
+- 开启省 Token 模式时，默认 compact get 只返回 `setup` 元信息：不展开历史、不标记消息已读、不生成批次。`view=persona` 单独交付完整人格和行为；`view=context` 读取最多8条未确认消息和必要前文，可用 context_limit 调小并沿 has_more 分页；`view=all,response_format=full` 保留完整排查入口。未决回执在 setup 中以ID、状态及读取入口提示，不能因此忽略 UNKNOWN 或重发。
 - 普通纯文本在 content 中保留全文，只移除与它完全相同的 text segments 副本；包含图片、@、引用等混合消息保留结构，数据库原文不变。
 - 工具总说明缩短，详细规则在具体工具/首次人格和动态提示中；默认 get 使用 compact，full 排查入口保留。
 - 开启模式后 MCP 在线传输仅保留一份完整 JSON TextContent 和原图像块，不重复 structuredContent。客户端应读取 structuredContent 或解析第一条文本 JSON；标准文本客户端同样能读取。没有 outputSchema 的工具不依赖 structuredContent。
@@ -26,6 +27,10 @@
 界面开关只修改 enabled。images 可设 automatic 恢复自动图片，预算和间隔可调；不会修改原主人设置、群授权、人格、聊天/学习记录。关掉开关恢复双份结果、自动图片和原学习调度；目录摘要仍为默认，旧客户端需要全文应显式 full。
 
 重连 MCP 或新开专用聊天任务，刷新工具参数与说明。工具缓存或静态人格缓存是否仍在，由 Harness 自己负责；只传实际读过的版本，不能凭返回编号声称读过原文。
+
+`scripts/chat_bridge.py` 是可选的标准MCP传输脚本，不运行模型。输入 `{"tool":"__bootstrap"}` 会一次整理最多8个活动会话的初始化数据，完全相同的人格/行为只交付一次，不读取聊天历史。普通调用用 `{"tool":"工具名","arguments":{}}`。它正确解析文本JSON而不是再次打印整个MCP信封；图片保存为真实像素文件供宿主查看，不把base64当文字打印。超过16000字符的完整结果原样保存到当前安装目录 `.tmp/chat-bridge/results/`，返回未读状态与文件哈希，必须分段读完才可确认消息或声称缓存；不会静默删字段或沿续接自动ACK。
+
+Harness 的系统、工具和技能本身也计入输入。目录变小不能证明冷启动的模型输入已经变小。支持自定义角色的Codex可以为专用聊天角色关闭无关App/插件/记忆及技能说明注入；这种角色仍继承宿主权限和MCP配置，不能用来改写主人的授权边界。角色能否在当前会话热加载须实际验证，不支持时不能声称已生效或反复冷启动高耗默认代理。
 
 ## 验证边界
 

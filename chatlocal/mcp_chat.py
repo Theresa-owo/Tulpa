@@ -53,8 +53,10 @@ def schemas(tool):
                   persona_preset=dict(type='string', maxLength=255, description='list_chat_personas 返回的 id，即 Markdown 文件名去掉 .md；支持中文。不要凭旧列表猜测。'),
                   participation=dict(type='string', enum=['quiet','natural','active'], default='natural'), **key),
              ['conversation_id','idempotency_key']),
-        tool('get_chat_session', '读取持续聊天上下文和进度；恢复时沿用 recovery 参数直接获取精简结果，full 可读取完整人格和协议。不会启动模型或自动发送。',
+        tool('get_chat_session', '省Token模式默认setup仅初始化元信息，persona完整读人设/行为，context按context_limit分页；all/full排查旧回执。UNKNOWN先核对，不重发。',
              dict(**sid,response_format=dict(type='string',enum=['compact','full'],default='compact'),
+                  view=dict(type='string',enum=['setup','persona','context','all'],description='首次setup仅元信息不读消息；persona单独完整人格/行为；context按context_limit分页；all含旧回执排查。'),
+                  context_limit=dict(type='integer',minimum=1,maximum=50,default=8),
                   known_prompt_version=dict(type='string',maxLength=120),known_static_version=dict(type='string',maxLength=64,description='仅传本Agent已完整读取并缓存的static_version，相同人格可跨群复用。')), ['session_id']),
         tool('list_chat_sessions', '默认活跃会话摘要；include_stopped 查历史，full 按需全文。首次 get 读取人格，目录不重复提供。',
              dict(response_format=dict(type='string',enum=['compact','full'],default='compact'),include_stopped=dict(type='boolean',default=False),offset=dict(type='integer',minimum=0,default=0),limit=dict(type='integer',minimum=1,maximum=100,default=50)), []),
@@ -276,13 +278,13 @@ class MCPChat:
     def messages(self, rows):
         return [dict({k:v for k,v in json.loads(r['payload']).items() if k!='reaction_epoch'}, id=r['id']) for r in rows]
 
-    def context(self, grant, row, recovery=False, cancel=None):
+    def context(self, grant, row, recovery=False, cancel=None,limit=50):
         with self.access.connect() as db:
             if recovery:
-                pending=db.execute('SELECT * FROM chat_inbox WHERE session_id=? AND id>? ORDER BY id LIMIT 51',(row['id'],row['cursor'])).fetchall()
+                pending=db.execute('SELECT * FROM chat_inbox WHERE session_id=? AND id>? ORDER BY id LIMIT ?',(row['id'],row['cursor'],limit+1)).fetchall()
                 history=db.execute('SELECT * FROM chat_inbox WHERE session_id=? AND id<=? ORDER BY id DESC LIMIT 5',(row['id'],row['cursor'])).fetchall()
-                recent=list(reversed(list(reversed(history))+pending[:50]))
-                more=len(pending)>50
+                recent=list(reversed(list(reversed(history))+pending[:limit]))
+                more=len(pending)>limit
             else:
                 recent = db.execute('SELECT * FROM chat_inbox WHERE session_id=? ORDER BY id DESC LIMIT 20',(row['id'],)).fetchall()
                 more=False
@@ -546,16 +548,42 @@ class MCPChat:
         return self.get(grant,sid,args.get('response_format','compact'),known_static_version=args.get('known_static_version'))
 
     @timing.stage('chat.get')
-    def get(self, grant, sid, response_format='full', known_prompt_version=None, known_static_version=None):
+    def get(self, grant, sid, response_format='full', known_prompt_version=None, known_static_version=None,view=None,context_limit=None):
         grant,row=self.validate(sid,grant['id'],active=False)
+        from .mcp_efficiency import policy
+        if view is None and response_format=='compact' and policy(self.access)['enabled']:view='setup'
+        if view in ('setup','persona'):
+            from .mcp_owner import OwnerGate
+            import hashlib
+            static={'persona':row['persona'],'behavior':prompts.BEHAVIOR}
+            version=hashlib.sha256(json.dumps(static,ensure_ascii=False,sort_keys=True).encode()).hexdigest()
+            session={k:v for k,v in self.public(row).items() if k in ('id','conversation_id','name','persona_preset','persona_name','participation','cursor','offered','active','state','prompt_version','gap_count','turn_process')}
+            result=dict(session=session,request_policy=OwnerGate(self.access).request_policy(grant),static_version=version,receiver=self.receiver.status())
+            if view=='persona':
+                if known_static_version!=version:result['static_context']=static
+                result['next_call']=self.continuation(sid)
+            else:
+                with self.access.connect() as db:
+                    result['pending_messages']=db.execute('SELECT count(*) FROM chat_inbox WHERE session_id=? AND id>?',(sid,row['cursor'])).fetchone()[0]
+                    operations=db.execute("SELECT id,kind,state FROM operations WHERE grant_id=? AND conversation_id=? AND state IN ('UNKNOWN','EXECUTING') ORDER BY created DESC",(grant['id'],row['conversation_id'])).fetchall()
+                result['unsettled_operations']=[dict(r,read_call=dict(tool='get_qq_operation',arguments={'operation_id':r['id']})) for r in operations]
+                result['next_call']=(self.continuation(sid) if known_static_version==version else dict(tool='get_chat_session',arguments=dict(session_id=sid,view='persona')))
+            return result
         self.touch(sid)
+        if view=='context':
+            result=self.read_context(grant,row,True,limit=context_limit or 8)
+            if response_format=='compact':
+                from .mcp_chat_output import compact_recovery
+                result=compact_recovery(result,known_prompt_version,known_static_version)
+            return result
         result=dict(instructions=CHAT_INSTRUCTIONS)
         with self.access.connect() as db:
             receipts=db.execute('''SELECT id FROM operations WHERE grant_id=? AND conversation_id=? AND
                 (state IN ('UNKNOWN','EXECUTING') OR id IN (SELECT id FROM operations WHERE grant_id=? AND conversation_id=? ORDER BY created DESC LIMIT 5))
                 ORDER BY created DESC''',(grant['id'],row['conversation_id'],grant['id'],row['conversation_id'])).fetchall()
         result['recent_operations']=[self.actions.get(r['id'],grant['id']) for r in receipts]
-        result.update(self.read_context(grant,row,True))
+        page=context_limit if context_limit is not None else 8 if response_format=='compact' and policy(self.access)['enabled'] else 50
+        result.update(self.read_context(grant,row,True,limit=page))
         result['session']['offered']=self.row(sid)['offered']
         with self.access.connect() as db:
             plans=db.execute('''SELECT * FROM chat_turn_plans WHERE session_id=? AND
@@ -567,11 +595,11 @@ class MCPChat:
             result=compact_recovery(result,known_prompt_version,known_static_version)
         return result
 
-    def read_context(self,grant,row,recovery=False,cancel=None):
+    def read_context(self,grant,row,recovery=False,cancel=None,limit=50):
         """Shared delivery/batch path for explicit reads and stale tool results."""
         result={}
         if row['active']:
-            result['context']=self.context(grant,row,recovery,cancel)
+            result['context']=self.context(grant,row,recovery,cancel,limit=limit)
             result['input_batch']=self.turns.batch(row,result['context']['messages'])
         row=self.row(row['id'])
         result['session']=self.public(row)
@@ -589,7 +617,8 @@ class MCPChat:
         if result.get('state')!='REJECTED' or result.get('error_code') not in ('stale','needs_refresh','batch_expired','plan_expired') or cancel.is_set():return result
         grant,row=self.validate(sid,grant['id'])
         from .mcp_chat_output import compact_recovery
-        updated=dict(instructions=CHAT_INSTRUCTIONS,**self.read_context(grant,row,True,cancel))
+        from .mcp_efficiency import policy
+        updated=dict(instructions=CHAT_INSTRUCTIONS,**self.read_context(grant,row,True,cancel,limit=8 if policy(self.access)['enabled'] else 50))
         self.validate(sid,grant['id'])
         if cancel.is_set():return result
         updated['session']['offered']=self.row(sid)['offered']
@@ -963,7 +992,7 @@ class MCPChat:
             offset=args.get('offset',0)
             return dict(items=allowed[offset:offset+100],has_more=len(allowed)>offset+100,next_offset=offset+100)
         if name=='start_chat_session':return self.start(grant,args,cancel)
-        if name=='get_chat_session':return self.get(grant,args['session_id'],args.get('response_format','compact'),args.get('known_prompt_version'),args.get('known_static_version'))
+        if name=='get_chat_session':return self.get(grant,args['session_id'],args.get('response_format','compact'),args.get('known_prompt_version'),args.get('known_static_version'),args.get('view'),args.get('context_limit'))
         if name=='read_chat_forward':return self.details.read(grant,args,cancel)
         if name=='list_chat_sessions':
             limit=args.get('limit',50);offset=args.get('offset',0)
