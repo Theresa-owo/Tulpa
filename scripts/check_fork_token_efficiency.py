@@ -105,7 +105,7 @@ def main():
             (root/'.env').write_text(f'REPLY_ONEBOT_URL=http://127.0.0.1:{upstream.server_port}\nREPLY_ONEBOT_WS_URL=ws://127.0.0.1:{events.port}\nREPLY_ONEBOT_WS_TOKEN=event-fixture\n',encoding='utf-8')
             with patch('chatlocal.onebot.ROOT',root),patch('chatlocal.message_sender.ROOT',root):
                 app=FastAPI();service=install_mcp_routes(app,Store(root/'chats.sqlite3'));access=service.access;chat=service.tools.chat
-                with TestClient(app):
+                with TestClient(app) as ui:
                     with socket.socket() as s:s.bind(('127.0.0.1',0));port=s.getsockname()[1]
                     access.configure(True,port);service.start();invalidate_availability()
                     g=access.create(dict(name='fixture',platforms=['qq'],conversations=[['qq',f'111:group:{n}'] for n in range(222,230)],chat=True,send=True,chat_images=True,chat_poke=True))
@@ -141,6 +141,33 @@ def main():
                     acked=chat.wait_many(grant,dict(short,silence_batches={sids[0]:p['input_batch']['id']}),cancel,allow_learning=False)
                     assert chat.row(sids[0])['cursor']==p['read_through_id']
                     assert not OneBot.sent
+                    # Persistent send fence blocks an already READY plan,
+                    # survives lease expiry, and cannot be reopened by renewal.
+                    from chatlocal.mcp_runtime_control import configure as fence,blocked
+                    chat.receive(dict(post_type='message',message_type='group',self_id=111,group_id=228,user_id=333,message_id=505,time=time.time(),message=[dict(type='text',data={'text':'栅栏测试'})]))
+                    fence_batch=chat.wait(grant,dict(session_id=sids[6],timeout_seconds=0),cancel,allow_learning=False)
+                    time.sleep(2.1)
+                    fence_plan=chat.turns.plan(grant,dict(session_id=sids[6],batch_id=fence_batch['input_batch']['id'],action='reply',expressions=['text'],intent='隔离栅栏验收'),cancel)
+                    assert fence_plan['state']=='READY',fence_plan
+                    fence_args=dict(session_ids=[sids[6]],paused=True,reason='initializing',lease_id='a'*32)
+                    assert ui.put('/api/mcp/chat-runtime',json=fence_args).status_code==403
+                    assert ui.put('/api/mcp/chat-runtime',json=fence_args,headers={'X-ChatWeave-UI':'1','Origin':'https://untrusted.example'}).status_code==403
+                    assert ui.put('/api/mcp/chat-runtime',json=fence_args,headers={'X-ChatWeave-UI':'1'}).status_code==200
+                    attempt=chat.turns.submit(grant,dict(session_id=sids[6],plan_id=fence_plan['plan_id'],expression_ids=[],bubbles=[dict(kind='text',text='不应发出')]),cancel)
+                    assert attempt['error_code']=='agent_paused' and not OneBot.sent
+                    assert chat.row(sids[6])['active']
+                    fence(access,dict(fence_args,paused=False,reason='live'))
+                    assert not blocked(access,sids[6])
+                    with patch('chatlocal.mcp_runtime_control.time.time',return_value=time.time()+61):assert blocked(access,sids[6])
+                    fence(access,dict(fence_args,reason='budget'))
+                    try:fence(access,dict(fence_args,paused=False,reason='live',renew=True))
+                    except ValueError:pass
+                    else:raise AssertionError('Renewal reopened a paused send fence')
+                    chat.turns.plan(grant,dict(session_id=sids[6],batch_id=fence_batch['input_batch']['id'],action='silence',intent='仅验收，不发言'),cancel)
+                    before_receipts=chat.row(sids[6])
+                    chat.get(grant,sids[6],view='receipts')
+                    assert (chat.row(sids[6])['cursor'],chat.row(sids[6])['offered'])==(before_receipts['cursor'],before_receipts['offered'])
+                    chat.wait(grant,dict(session_id=sids[6],acknowledge_through_id=fence_batch['read_through_id'],timeout_seconds=0),cancel,allow_learning=False)
                     assert 'silence_batches' not in chat.wait_states[acked['next_call']['arguments']['wait_state_id']][2]
                     try:chat.wait_many(dict(grant,id='another-grant'),short,cancel,allow_learning=False)
                     except ValueError:pass

@@ -55,7 +55,7 @@ def schemas(tool):
              ['conversation_id','idempotency_key']),
         tool('get_chat_session', '省Token模式默认setup仅初始化元信息，persona完整读人设/行为，context按context_limit分页；all/full排查旧回执。UNKNOWN先核对，不重发。',
              dict(**sid,response_format=dict(type='string',enum=['compact','full'],default='compact'),
-                  view=dict(type='string',enum=['setup','persona','context','all'],description='首次setup仅元信息不读消息；persona单独完整人格/行为；context按context_limit分页；all含旧回执排查。'),
+                  view=dict(type='string',enum=['setup','persona','context','receipts','all'],description='setup仅元信息；persona完整人格/行为；context分页；receipts仅回执，不读取或确认聊天；all完整排查。'),
                   context_limit=dict(type='integer',minimum=1,maximum=50,default=8),
                   known_prompt_version=dict(type='string',maxLength=120),known_static_version=dict(type='string',maxLength=64,description='仅传本Agent已完整读取并缓存的static_version，相同人格可跨群复用。')), ['session_id']),
         tool('list_chat_sessions', '默认活跃会话摘要；include_stopped 查历史，full 按需全文。首次 get 读取人格，目录不重复提供。',
@@ -569,6 +569,10 @@ class MCPChat:
                 result['unsettled_operations']=[dict(r,read_call=dict(tool='get_qq_operation',arguments={'operation_id':r['id']})) for r in operations]
                 result['next_call']=(self.continuation(sid) if known_static_version==version else dict(tool='get_chat_session',arguments=dict(session_id=sid,view='persona')))
             return result
+        if view=='receipts':
+            with self.access.connect() as db:
+                plans=db.execute("SELECT * FROM chat_turn_plans WHERE session_id=? AND (state IN ('SENDING','UNKNOWN') OR id IN (SELECT id FROM chat_turn_plans WHERE session_id=? ORDER BY created DESC LIMIT 5)) ORDER BY created DESC",(sid,sid)).fetchall()
+            return dict(session_id=sid,recent_turns=[dict(self.turns.public(dict(p)),created=p['created'],updated=p['updated']) for p in plans])
         self.touch(sid)
         if view=='context':
             result=self.read_context(grant,row,True,limit=context_limit or 8)

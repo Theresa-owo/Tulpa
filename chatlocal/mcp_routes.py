@@ -62,6 +62,20 @@ def install_mcp_routes(app, store=None):
         atomic_bytes(access.path.parent/'mcp-efficiency.json',json.dumps(cfg).encode())
         return cfg
 
+    @app.get('/api/mcp/chat-runtime')
+    def chat_runtime_status(request: Request):
+        local(request)
+        from .mcp_runtime_control import state
+        try:return state(access)
+        except ValueError as exc:raise HTTPException(400,str(exc)) from None
+
+    @app.put('/api/mcp/chat-runtime')
+    def chat_runtime_change(request: Request, body: dict):
+        local(request,True)
+        from .mcp_runtime_control import configure
+        try:return configure(access,body)
+        except ValueError as exc:raise HTTPException(400,str(exc)) from None
+
     @app.put('/api/mcp')
     def configure(request: Request, body: dict):
         local(request, True)

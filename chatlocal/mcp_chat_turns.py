@@ -320,6 +320,8 @@ class ChatTurns:
     def check(self,p,cancel,*,cooldown=False):
         data=json.loads(p['payload']);sid=p['session_id']
         _,row=self.chat.validate(sid,data['grant_id'])
+        from .mcp_runtime_control import blocked
+        if blocked(self.access,sid):raise TurnRejected('agent_paused','外部聊天运行器已暂停，未派发新表达。')
         if cancel.is_set():raise TurnRejected('cancelled','本次发送已取消。')
         policy=self.policy();now=time.time()
         if data['epoch']!=self.epoch or row['gap_count']!=data['gap']:
