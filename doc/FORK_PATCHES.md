@@ -79,6 +79,8 @@ Agent 先读取消息，再调用 `read_owner_command(session_id, event_id)`。�
 
 ## 验证入口
 
+原生长时间聊天另见[上下文边界和无损资料交接](NATIVE_CONTEXT.md)。`native_chat_context.py`读取真实原生输入计数，在越界时只暂停当前scope与lease，拒绝复用长历史线程；父代理负责确认退出并创建新的原生代。此流程没有新增推理服务或MCP权限。配置自动压缩阈值不属于生效证据，实际新代输入和完整bootstrap交付必须通过检查。
+
 从已安装仓库开发依赖的 Python 环境执行：
 
 ```powershell
@@ -90,6 +92,7 @@ python scripts/check_fork_permissions.py
 python scripts/check_fork_owner_gate.py
 python scripts/check_fork_upstream_sync.py
 python scripts/check_publication.py
+python scripts/check_native_context.py
 ```
 
 这些检查使用隔离数据库、合成消息、本地 HTTP / WebSocket 服务或临时 Git 仓库，不访问真实账号和群，也不调用模型。原有 MCP、消息目标、聊天规划、媒体、附件、权限编辑和界面检查继续保留。Windows CI 已加入 fork 行为回归。

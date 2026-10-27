@@ -75,7 +75,7 @@ jobs:
           $checks += @('check_mcp_picker.py','check_image_identity.py','check_mcp_chat_enrichment.py','check_mcp_chat_output.py','check_mcp_image_reuse.py','check_reply_timing.py','check_antigravity_reply_timing.py')
           $checks += @('check_fork_mcp_parallel.py','check_fork_mcp_realtime.py','check_fork_native_files.py','check_fork_scope_edit.py','check_fork_upstream_sync.py','check_fork_permissions.py')
           $checks += @('check_fork_owner_gate.py')
-          $checks += @('check_fork_token_efficiency.py','check_chat_agent.py','check_chat_attention.py')
+          $checks += @('check_fork_token_efficiency.py','check_chat_agent.py','check_chat_attention.py','check_native_context.py')
           $checks += @('check_bilibili.py','check_mcp_history_optional.py','check_mcp_connection_ui.py','check_mcp_cli.py')
           foreach ($check in $checks) {
             python "scripts/$check"

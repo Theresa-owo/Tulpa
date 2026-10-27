@@ -1,6 +1,8 @@
 model = "gpt-6.1-sol"
 model_reasoning_effort = "low"
 model_verbosity = "low"
+# Optional client hint only. Actual growth is bounded by native_chat_context.py
+# watch + a fresh native generation. This setting alone is not acceptance.
 model_auto_compact_token_limit = 120000
 
 developer_instructions = """
