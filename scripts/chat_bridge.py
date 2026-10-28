@@ -67,7 +67,7 @@ async def bootstrap(client,request):
             persona=payload(await client.call_tool('get_chat_session',dict(session_id=row['id'],view='persona')))
             if persona.get('static_version')!=version or not persona.get('static_context'):raise ValueError('Persona changed during initialization; retry setup')
             contexts[version]=persona['static_context']
-        sessions.append(dict(setup['session'],static_version=version,pending_messages=setup.get('pending_messages',0)))
+        sessions.append(dict(setup['session'],static_version=version,pending_messages=setup.get('pending_messages',0),remembered_facts=setup.get('remembered_facts',0)))
         policies.append(setup['request_policy'])
         for operation in setup.get('unsettled_operations',[]):recovery.append(dict(session_id=row['id'],**operation))
         plan=setup['session'].get('turn_process',{}).get('last_plan')
@@ -75,7 +75,7 @@ async def bootstrap(client,request):
     result=dict(sessions=sessions,static_contexts=share_static(contexts),receiver=listing['receiver'],
         request_policy=policies[0] if all(p==policies[0] for p in policies) else {s['id']:p for s,p in zip(sessions,policies)},recovery_required=recovery)
     if any('inherits_static_version' in c for c in result['static_contexts'].values()):result['static_context_rule']='继承版本的完整人格及行为，再逐字追加persona_append；此为无损共享，不是摘要。'
-    if not recovery:result['next_call']=dict(tool='wait_chat_messages_many',arguments=dict(session_ids=[s['id'] for s in sessions],known_prompt_versions={s['id']:s['prompt_version'] for s in sessions},timeout_seconds=150,limit=30))
+    if not recovery:result['next_call']=dict(tool='wait_chat_messages_many',arguments=dict(session_ids=[s['id'] for s in sessions],known_prompt_versions={s['id']:s['prompt_version'] for s in sessions},timeout_seconds=150,limit=30,prefer_live=True))
     return result
 
 

@@ -10,7 +10,8 @@
     "Native QQ files, image reading and downloads",
     "Scoped MCP grant editing",
     "Concurrent MCP reads and event-driven chat waits",
-    "Owner-origin checks and dedicated proactive/reply poke permission"
+    "Owner-origin checks and dedicated proactive/reply poke permission",
+    "Scoped durable SQLite memory and low-overhead live chat continuations"
   ],
   "required_checks": [
     "scripts/check_fork_upstream_sync.py",
@@ -22,6 +23,9 @@
     "scripts/check_fork_permissions.py",
     "scripts/check_fork_owner_gate.py",
     "scripts/check_fork_token_efficiency.py",
+    "scripts/check_chat_memory.py",
+    "scripts/check_chat_wire_deltas.py",
+    "scripts/check_upgrade.py",
     "scripts/check_chat_agent.py",
     "scripts/check_mcp_downloads.py",
     "scripts/check_mcp_qq_extensions.py",

@@ -387,6 +387,21 @@ def main():
                     notice('add',uid=111,message_id=mid,message_seq=77001)
                     idle=call('wait_chat_messages',session_id=sid,timeout_seconds=1,quiet_seconds=0)
                     assert idle['event']=='idle' and not idle['chat_guidance']['reaction_notices']['new_items'],idle
+                    # Real MCP service continuation sends old reaction history
+                    # once, then only changes; actual new reactions still wake.
+                    efficiency=access.path.parent/'mcp-efficiency.json'
+                    efficiency.write_text(json.dumps(dict(enabled=True)),'utf-8')
+                    first=call('wait_chat_messages_many',session_ids=[sid],timeout_seconds=0)
+                    prior=first['results'][0]['chat_guidance']['reaction_notices']['items'];assert prior
+                    follow=call('wait_chat_messages_many',wait_state_id=first['next_call']['arguments']['wait_state_id'],timeout_seconds=0)
+                    compact=follow['results'][0]['chat_guidance']['reaction_notices']
+                    assert not compact['items'] and compact['history_omitted']==len(prior),compact
+                    notice('add',uid=556,message_id=mid,message_seq=77001)
+                    eventually(lambda:any(n.get('operator_id')=='556' for n in tools.chat.reactions.pending(tools.chat.row(sid))))
+                    fresh=call('wait_chat_messages_many',wait_state_id=follow['next_call']['arguments']['wait_state_id'],timeout_seconds=0)
+                    fresh_notices=fresh['results'][0]['chat_guidance']['reaction_notices']
+                    assert any(n.get('operator_id')=='556' for n in fresh_notices['new_items']),fresh_notices
+                    efficiency.unlink()
                     # Receipt observation does not turn it into a write target.
                     deny(react(ownid,'receipt-is-not-write-target'),before,'target_expired')
                     # Missing/foreign/failed receipt, private source, bad seq,

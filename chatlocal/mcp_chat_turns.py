@@ -153,11 +153,15 @@ class ChatTurns:
     @timing.stage('turn.batch')
     def batch(self,row,items,collection=None):
         now=time.time();bid=uuid.uuid4().hex;ids=[m['id'] for m in items]
+        # A live-only idle can preserve old unread messages while identifying
+        # genuinely new arrivals after this decision. This is a freshness
+        # boundary, not an ACK or cursor advance.
+        watermark=max(ids,default=max(row['cursor'],(collection or {}).get('deferred_watermark',row['cursor'])))
         timing.note(session_id=row['id'], batch_id=bid, batch_created_at=now,
                     event_ids=ids[:50], collection_reason=(collection or {}).get('reason'))
         with self.access.connect() as db:
             db.execute('INSERT INTO chat_input_batches VALUES(?,?,?,?,?,?,?)',
-                       (bid,row['id'],self.epoch,now,max(ids,default=row['cursor']),dump(ids),row['gap_count']))
+                       (bid,row['id'],self.epoch,now,watermark,dump(ids),row['gap_count']))
             from .mcp_chat_attention import remember
             remember(db,row,bid,ids,collection)
             db.execute('DELETE FROM chat_input_batches WHERE session_id=? AND id NOT IN (SELECT id FROM chat_input_batches WHERE session_id=? ORDER BY created DESC LIMIT 64)',(row['id'],row['id']))
@@ -167,7 +171,7 @@ class ChatTurns:
             if not bursts or bursts[-1]['sender_id']!=m['sender_id'] or m['timestamp']-bursts[-1]['last_timestamp']>5000:
                 bursts.append(dict(sender_id=m['sender_id'],event_ids=[],last_timestamp=m['timestamp']))
             bursts[-1]['event_ids'].append(m['id']);bursts[-1]['last_timestamp']=m['timestamp']
-        return dict(id=bid,version=max(ids,default=row['cursor']),phase='DECIDING',
+        return dict(id=bid,version=watermark,phase='DECIDING',
                     collection=collection or dict(reason='context_read',ready_to_send=False),bursts=bursts,
                     plan_call=dict(tool='plan_chat_reply',arguments=dict(session_id=row['id'],batch_id=bid),
                                    requires=['action','intent'],optional=['target_event_id','expressions']),

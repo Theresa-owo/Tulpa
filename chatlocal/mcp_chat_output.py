@@ -7,6 +7,37 @@ import hashlib
 import json
 
 
+def reaction_delta(packet,seen):
+    """Suppress only byte-identical previously delivered reaction history.
+
+    New notices, changed observations and notices about this input batch are
+    always sent. `seen` belongs to one server-issued wait-state lineage.
+    """
+    guidance=packet.get('chat_guidance',{});notices=guidance.get('reaction_notices',{})
+    if not isinstance(notices,dict):return packet,seen
+    items=notices.get('items',[]);fresh=notices.get('new_items',[])
+    if not isinstance(items,list) or not isinstance(fresh,list):return packet,seen
+    cache=dict(seen);new_ids={n.get('notice_id') for n in fresh if isinstance(n,dict)}
+    active={m.get('id') for m in packet.get('messages',[]) if isinstance(m,dict)}
+    delivered=[]
+    for item in items:
+        if not isinstance(item,dict) or type(item.get('notice_id')) is not int:
+            delivered.append(item);continue
+        key=str(item['notice_id'])
+        digest=hashlib.sha256(json.dumps(item,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+        if cache.get(key)!=digest or item['notice_id'] in new_ids or item.get('target_event_id') in active:
+            delivered.append(item)
+        cache[key]=digest
+    # Reaction history itself retains at most 200 entries. Dropping a cached
+    # identity only causes a safe redelivery, never a missed new observation.
+    if len(cache)>256:cache={k:cache[k] for k in sorted(cache,key=int)[-256:]}
+    if len(delivered)!=len(items):
+        packet=dict(packet);guidance=dict(guidance);notices=dict(notices)
+        notices['items']=delivered;notices['history_omitted']=len(items)-len(delivered)
+        guidance['reaction_notices']=notices;packet['chat_guidance']=guidance
+    return packet,cache
+
+
 def messages(items):
     """Drop only exact duplicate plain text; never truncate or flatten media."""
     result=[]
@@ -50,6 +81,9 @@ def compact_wait(data,known_prompt_version=None):
     # Passive add/remove observations can accompany an idle packet without
     # requesting a reply. They are evidence, not redundant static guidance.
     guidance['reaction_notices']={k:notices.get(k,[]) for k in ('items','new_items')}
+    if notices.get('history_omitted'):
+        guidance['reaction_notices']['history_omitted']=notices['history_omitted']
+        guidance['reaction_notices']['history_read']='get_chat_session(view="context") 可重新读取本会话有限通知历史。'
     learning=full.get('language_learning')
     if learning:guidance['language_learning']={k:learning[k] for k in ('enabled','automatic') if k in learning}
     result={k:v for k,v in data.items() if k not in ('chat_guidance','note')}

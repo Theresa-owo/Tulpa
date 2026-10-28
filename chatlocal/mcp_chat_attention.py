@@ -21,10 +21,13 @@ def install(access):
             db.execute('ALTER TABLE chat_attention_batches ADD COLUMN connected_at REAL')
 
 
-def select(chat,row,limit):
+def select(chat,row,limit,*,prefer_live=False):
     """A priority page is contiguous from its anchor; the old queue is retained."""
     sid=row['id'];cursor=row['cursor'];now=time.time();connection=chat.receiver.status().get('connected_at')
     with chat.access.connect() as db:
+        # The old-message boundary and the freshness scan must observe one
+        # snapshot; a concurrently arriving live event must stay beyond it.
+        db.execute('BEGIN')
         head=db.execute('SELECT * FROM chat_inbox WHERE session_id=? AND id>? AND completed=0 ORDER BY id LIMIT ?',
                         (sid,cursor,limit+1)).fetchall()
         if not head:return head,dict(priority=False,rank=0,reason='idle',backlog_pending=False)
@@ -33,15 +36,32 @@ def select(chat,row,limit):
             AND EXISTS(SELECT 1 FROM json_each(i.payload,'$.segments') s
                 WHERE json_extract(s.value,'$.type')=? AND CAST(json_extract(s.value,'$.qq') AS TEXT)=?)
             ORDER BY i.id DESC LIMIT 1''',(sid,cursor,now-900,'at',row['conversation_id'].split(':')[0])).fetchone()
-        anchor=mention['id'] if mention else None;reason='direct_mention' if mention else 'live_topic'
-        rank=4 if mention else 3
+        owner=None
+        if prefer_live:
+            policy=db.execute('SELECT owner_qq,enabled,after_event_id FROM owner_policies WHERE grant_id=?',(row['grant_id'],)).fetchone()
+            if policy and policy['enabled']:
+                owner=db.execute('''SELECT id FROM chat_inbox WHERE session_id=? AND id>? AND id>? AND completed=0 AND at>=?
+                    AND CAST(json_extract(payload,'$.sender_id') AS TEXT)=? AND coalesce(json_extract(payload,'$.is_self'),0)=0
+                    AND coalesce(json_extract(payload,'$.recalled'),0)=0 ORDER BY id LIMIT 1''',
+                    (sid,cursor,policy['after_event_id'],now-600,policy['owner_qq'])).fetchone()
+        anchor=owner['id'] if owner else mention['id'] if mention else None
+        reason='owner_recent' if owner else 'direct_mention' if mention else 'live_topic'
+        rank=5 if owner else 4 if mention else 3
         if anchor is None:
             fresh=db.execute('SELECT id FROM chat_inbox WHERE session_id=? AND id>? AND completed=0 AND at>=? ORDER BY id LIMIT 1',
                              (sid,cursor,now-120)).fetchone()
             anchor=fresh['id'] if fresh else None
         # A live head already has normal contiguous delivery. Only skip the
         # old queue when the attention anchor is beyond the current page.
-        if anchor is None:return head,dict(priority=False,rank=2,reason='backlog',backlog_pending=False)
+        if anchor is None:
+            if prefer_live:
+                last=db.execute('SELECT max(id) FROM chat_inbox WHERE session_id=? AND id>? AND completed=0',(sid,cursor)).fetchone()[0]
+                return [],dict(priority=False,rank=0,reason='idle',backlog_pending=True,deferred_watermark=last or cursor)
+            return head,dict(priority=False,rank=2,reason='backlog',backlog_pending=False)
+        if prefer_live and anchor>head[0]['id']:
+            chosen=db.execute('SELECT * FROM chat_inbox WHERE session_id=? AND id>=? AND completed=0 ORDER BY id LIMIT ?',
+                              (sid,anchor,limit+1)).fetchall()
+            return chosen,dict(priority=True,rank=rank,reason=reason,anchor_event_id=anchor,backlog_pending=True,source_connected_at=connection)
         if anchor<=head[min(limit,len(head))-1]['id']:
             return head,dict(priority=False,rank=rank,reason=reason,backlog_pending=False)
         chosen=db.execute('SELECT * FROM chat_inbox WHERE session_id=? AND id>=? AND completed=0 ORDER BY id LIMIT ?',

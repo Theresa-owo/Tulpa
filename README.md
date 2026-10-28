@@ -4,7 +4,7 @@
 
 # Tulpa
 
-此 fork 在上游基础上保留原生文件与图片下载、工作区文件发送、群授权追加、低延迟多群消息获取、主人 QQ 校验和独立拍一拍权限，并提供带 Token 预算的官方 Codex 聊天运行器。实时@与当前话题优先于旧积压，原生Agent保留自然接话和主动话题能力。长时间原生聊天使用[实测上下文边界与安全交接](doc/NATIVE_CONTEXT.md)，不依赖可能无效的角色压缩配置。安装与升级见[部署本 fork](#部署本-fork)，功能与权限见 [fork 补丁说明](doc/FORK_PATCHES.md)，后续合并上游并保留自有修改见 [维护说明](doc/FORK_MAINTENANCE.md)。
+此 fork 在上游基础上保留原生文件与图片下载、工作区文件发送、群授权追加、低延迟多群消息获取、主人 QQ 校验和独立拍一拍权限，并提供带 Token 预算的官方 Codex 聊天运行器。实时@与当前话题优先于旧积压，原生Agent保留自然接话和主动话题能力。[本地长期记忆与低开销等待](doc/MCP_CHAT_MEMORY.md)支持按需存取重要事实，长时间原生聊天的宿主限制见[上下文说明](doc/NATIVE_CONTEXT.md)。安装与升级见[部署本 fork](#部署本-fork)，功能与权限见 [fork 补丁说明](doc/FORK_PATCHES.md)，后续合并上游并保留自有修改见 [维护说明](doc/FORK_MAINTENANCE.md)。
 
 **使用MCP，让你几乎所有的Agent访问QQ/微信/B站，甚至亲自下场水群！**
 

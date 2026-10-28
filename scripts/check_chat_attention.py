@@ -61,11 +61,11 @@ def main():
                     for sid in sids:chat.learning.configure(sid,dict(enabled=False))
                     eventually(lambda:chat.receiver.status()['state']=='connected')
                     counter=0
-                    def add(index,text='hello',at=False):
+                    def add(index,text='hello',at=False,user=333):
                         nonlocal counter
                         counter+=1;segments=[dict(type='text',data={'text':text})]
                         if at:segments.insert(0,dict(type='at',data={'qq':'111' if at is True else str(at)}))
-                        chat.receive(dict(post_type='message',message_type='group',self_id=111,group_id=222+index,user_id=333,message_id=counter,time=time.time(),message=segments))
+                        chat.receive(dict(post_type='message',message_type='group',self_id=111,group_id=222+index,user_id=user,message_id=counter,time=time.time(),message=segments))
                         with access.connect() as db:
                             eid=db.execute('SELECT max(id) FROM chat_inbox WHERE session_id=?',(sids[index],)).fetchone()[0]
                             db.execute("UPDATE chat_inbox SET payload=json_set(payload,'$.received_at',?) WHERE id=?",(time.time()-1,eid))
@@ -74,6 +74,20 @@ def main():
                     def many(**args):return chat.wait_many(grant,dict(session_ids=sids,timeout_seconds=0,limit=3,**args),cancel,allow_learning=False)
                     old=[add(0,f'old-{n}') for n in range(1000)]
                     with access.connect() as db:db.execute("UPDATE chat_inbox SET at=?,payload=json_set(payload,'$.received_at',?) WHERE session_id=?",(time.time()-3600,time.time()-3600,sids[0]))
+                    deferred=one(0,prefer_live=True)
+                    assert deferred['event']=='idle' and deferred['attention']['backlog_pending'] and not deferred['messages']
+                    assert chat.row(sids[0])['cursor']==0,'Deferring old messages advanced the cursor'
+                    with access.connect() as db:
+                        assert db.execute('SELECT sum(completed) FROM chat_inbox WHERE session_id=?',(sids[0],)).fetchone()[0]==0
+                    # Proactive participation remains possible without falsely
+                    # acknowledging the old unread queue.
+                    offered=chat.turns.plan(grant,dict(session_id=sids[0],batch_id=deferred['input_batch']['id'],action='reply',expressions=['text'],intent='自然开启话题'),cancel)
+                    assert offered['state']=='READY',offered
+                    with access.connect() as db:db.execute("UPDATE chat_turn_plans SET state='CANCELLED' WHERE id=?",(offered['plan_id'],))
+                    arrived=add(0,'自然话题之后的新消息')
+                    stale=chat.turns.plan(grant,dict(session_id=sids[0],batch_id=deferred['input_batch']['id'],action='reply',expressions=['text'],intent='新消息应被重新判断'),cancel)
+                    assert stale['state']=='REJECTED' and stale['error_code'] in ('stale','needs_refresh'),stale
+                    with access.connect() as db:db.execute('DELETE FROM chat_inbox WHERE id=?',(arrived,))
                     ordinary=add(1,'普通实时消息');target=add(0,'抱抱',at=True);follow=add(0,'就抱一下')
                     start=time.monotonic();packet=many()['results'][0]
                     assert time.monotonic()-start<.75 and packet['session_id']==sids[0]
@@ -146,6 +160,30 @@ def main():
                     assert len(OneBot.sent)==5
                     add(4,'长'*3500,at=True);add(5,'短问候',at=True)
                     assert len(many()['results'])==1,'Large context was combined into an unbounded multi-group packet'
+                    # Old unread history is retained, but a genuine recent
+                    # owner message survives the 120-second live cutoff.
+                    old_owner_group=add(6,'旧群消息')
+                    with access.connect() as db:db.execute('UPDATE chat_inbox SET at=? WHERE id=?',(time.time()-3600,old_owner_group))
+                    from chatlocal.mcp_owner import OwnerGate
+                    OwnerGate(access).configure(grant['id'],dict(enabled=True,owner_qq='33333',expected_revision=0))
+                    grant=access.authorize(g['token'],source=False)
+                    owner_id=add(6,'主人自然语言请求',user=33333)
+                    with access.connect() as db:db.execute('UPDATE chat_inbox SET at=? WHERE id=?',(time.time()-300,owner_id))
+                    owner=many(prefer_live=True)['results'][0]
+                    assert owner['session_id']==sids[6] and owner['attention']['reason']=='owner_recent'
+                    assert [m['id'] for m in owner['messages']]==[owner_id]
+                    silent=chat.turns.plan(grant,dict(session_id=sids[6],batch_id=owner['input_batch']['id'],action='silence',intent='已读本批'),cancel)
+                    assert silent['state']=='SILENT'
+                    one(6,prefer_live=True,acknowledge_through_id=owner['read_through_id'])
+                    assert chat.row(sids[6])['cursor']==0
+                    with access.connect() as db:
+                        assert db.execute('SELECT completed FROM chat_inbox WHERE id=?',(old_owner_group,)).fetchone()[0]==0
+                    old_small=add(7,'较早消息')
+                    with access.connect() as db:db.execute('UPDATE chat_inbox SET at=? WHERE id=?',(time.time()-3600,old_small))
+                    quiet=one(7,prefer_live=True);assert quiet['event']=='idle'
+                    add(7,'刚到的新消息')
+                    raced=chat.turns.plan(grant,dict(session_id=sids[7],batch_id=quiet['input_batch']['id'],action='reply',expressions=['text'],intent='自然主动接话'),cancel)
+                    assert raced['state']=='REJECTED' and raced['error_code']=='stale',raced
                     print('PASS: @ behind 1000 old messages delivered immediately; exact ACK retains holes; cache trim does not starve reply; stream replacement rejected; multi-group live priority; duplicate/reopen/UNKNOWN protection; proactive Planner and real loopback send')
                     print('PASS: bounded two-group microbatch, separate target/send/ACK and large/media fallback')
     finally:events.close();upstream.shutdown();upstream.server_close()

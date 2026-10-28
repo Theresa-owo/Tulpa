@@ -109,7 +109,8 @@ def running_in(roots):
 
 def state_files(root):
     names = ['.env', 'data/chats.sqlite3', 'data/chats.sqlite3-wal',
-             'data/mcp-access.sqlite3', 'data/mcp-access.sqlite3-wal', 'data/desktop-preferences.json',
+             'data/mcp-access.sqlite3', 'data/mcp-access.sqlite3-wal',
+             'data/mcp-chat-memory.sqlite3', 'data/mcp-chat-memory.sqlite3-wal', 'data/desktop-preferences.json',
              'data/qq-snapshot-info.json', 'data/wechat-snapshot-info.json']
     return {name: digest(child(root, name)) for name in names if child(root, name).is_file()
             and (not name.endswith('-wal') or child(root, name).stat().st_size > 0)}
@@ -118,7 +119,8 @@ def state_files(root):
 def database_summary(root):
     result = {}
     for name, tables in [('chats.sqlite3', ('messages', 'sources', 'artifact_sources', 'workspaces', 'sessions')),
-                         ('mcp-access.sqlite3', ('grants', 'operations', 'chat_sessions'))]:
+                         ('mcp-access.sqlite3', ('grants', 'operations', 'chat_sessions')),
+                         ('mcp-chat-memory.sqlite3', ('chat_memories', 'chat_memory_revisions'))]:
         path = child(root, 'data/' + name)
         if not path.exists():
             continue
@@ -184,8 +186,8 @@ def upgrade(source, target, *, apply=False, progress=print):
         backup.mkdir(parents=True)
         locks = ExitStack()
         with locks:
-            # Refuse a late writer. Keep both databases frozen for the whole program update.
-            for name in ('chats.sqlite3', 'mcp-access.sqlite3'):
+            # Refuse a late writer. Keep these databases frozen for the update.
+            for name in ('chats.sqlite3', 'mcp-access.sqlite3', 'mcp-chat-memory.sqlite3'):
                 dbpath = child(target, 'data/' + name)
                 if not dbpath.exists():
                     continue

@@ -14,7 +14,7 @@ description = "Context-managed Tulpa chat with unchanged host capabilities."
 config_file = "agent-configs/tulpa_chat_layer.toml"
 ```
 
-将 `examples/tulpa_chat_layer.toml` 放在该相对位置。此兼容层保留 `gpt-6.1-sol / low`；其中`model_auto_compact_token_limit = 120000`只是可选宿主提示。本机实测曾超过该值而没有任何真实压缩，因此不能依靠它治理长时间聊天，也不能把它当作验收结果。生产运行采用[实际上下文边界与父代理安全交接](NATIVE_CONTEXT.md)：watch读取provider真实输入计数，越界关闭本轮发送，父代理确认旧原生线程退出后创建不带旧历史的新原生线程，完整交付人格、当前事实及可检索原始证据。角色文件本身不会生成这个父代理循环。[官方子代理说明](https://learn.chatgpt.com/docs/agent-configuration/subagents) · [配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)
+将 `examples/tulpa_chat_layer.toml` 放在该相对位置。此兼容层保留 `gpt-6.1-sol / low`。本机曾出现配置自动压缩阈值后超过阈值却没有真实压缩的情况，配置值不能作为验收证据。用户要求一个会话持续聊天时，不强制上下文轮换；可使用[本地长期记忆](MCP_CHAT_MEMORY.md)按需保存和检索。明确要求受控分段时，另有[可选的边界与安全交接](NATIVE_CONTEXT.md)，需要父代理运行完整流程。[官方子代理说明](https://learn.chatgpt.com/docs/agent-configuration/subagents) · [配置参考](https://learn.chatgpt.com/docs/config-file/config-reference)
 
 ## 初始化与持续运行
 

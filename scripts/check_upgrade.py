@@ -51,6 +51,9 @@ def main():
         mcp = sqlite3.connect(old / 'data/mcp-access.sqlite3')
         mcp.executescript("CREATE TABLE grants(token_hash TEXT, scope TEXT); INSERT INTO grants VALUES('same-token-hash','unchanged-permissions'); CREATE TABLE settings(port INTEGER, enabled INTEGER); INSERT INTO settings VALUES(18777,1);")
         mcp.close()
+        memory = sqlite3.connect(old / 'data/mcp-chat-memory.sqlite3')
+        memory.executescript("CREATE TABLE chat_memories(content TEXT); INSERT INTO chat_memories VALUES('durable-important-memory'); CREATE TABLE chat_memory_revisions(content TEXT);")
+        memory.close()
         state = u.state_files(old)
         import ctypes
         short = ctypes.create_unicode_buffer(32768)
@@ -60,6 +63,7 @@ def main():
         with patch.object(u, 'running_in', return_value=[]):
             plan = u.upgrade(new, old, progress=quiet)
             assert not plan['applied'] and plan['preserved']['chats.sqlite3']['messages'] == 1
+            assert plan['preserved']['mcp-chat-memory.sqlite3']['chat_memories'] == 1
             assert not (old / '.tmp').exists(), 'Check-only created state'
             with patch.object(u, 'running_in', return_value=[123]):
                 fails(lambda: u.upgrade(new, old, apply=True, progress=quiet))
@@ -87,6 +91,7 @@ def main():
             assert not (old / 'chatlocal/retired.py').exists()
             assert (Path(result['backup']) / 'program/chatlocal/retired.py').is_file()
             assert (Path(result['backup']) / 'userdata/data/chats.sqlite3-wal').exists()
+            assert (Path(result['backup']) / 'userdata/data/mcp-chat-memory.sqlite3').is_file()
             assert (old / 'Tulpa.exe').read_bytes() == b'program-0.5.1'
             assert u.upgrade(new, old, apply=True, progress=quiet)['already_current']
             for directory in ('data/media', 'data/live', 'imports', 'reports/private', '.cache/voice-models'):
