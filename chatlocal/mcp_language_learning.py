@@ -85,6 +85,9 @@ class ChatLearning:
         # Hints are not claims: retain the job and retry a missed hint, but do
         # not make the host reprocess an unchanged long context in a tight loop.
         self.delivered_wakes={}
+        # Preserve the live/backlog selection used for each delivered learning
+        # wake through its claim and submission, scoped to the same grant.
+        self.wake_modes={};self.lease_modes={}
 
     def resume(self):
         if self.worker and self.worker.is_alive():return
@@ -144,16 +147,38 @@ class ChatLearning:
                 return ready
             except (ValueError,OSError,sqlite3.Error):return dict(ready=False,reason='unavailable')
 
-    def mark_delivered(self,grant,packet):
+    def mark_delivered(self,grant,packet,*,prefer_live=False):
         wake=packet.get('learning_ready',{})
         if packet.get('event')!='learning_ready' or not wake.get('wake_id'):return
         from .mcp_efficiency import policy as efficiency_policy
-        if not efficiency_policy(self.chat.access)['enabled']:return
+        efficiency=efficiency_policy(self.chat.access)['enabled']
         with self.chat.lock:
             now=time.monotonic()
             # A new stage has a new wake_id and is immediately deliverable.
             self.delivered_wakes={k:v for k,v in self.delivered_wakes.items() if now-v<3600}
-            self.delivered_wakes[(grant['id'],packet['session_id'],wake['wake_id'])]=now
+            self.wake_modes={k:v for k,v in self.wake_modes.items() if now-v[1]<3600}
+            self.lease_modes={k:v for k,v in self.lease_modes.items() if now-v[1]<3600}
+            key=(grant['id'],packet['session_id'],wake['wake_id'])
+            self.wake_modes[key]=(bool(prefer_live),now)
+            if efficiency:self.delivered_wakes[key]=now
+
+    def handoff_prefer_live(self,grant,name,args):
+        sid=args['session_id'];gid=grant['id']
+        with self.chat.lock:
+            if name=='claim_chat_learning':
+                record=self.wake_modes.get((gid,sid,args.get('wake_id')))
+            elif name=='submit_chat_learning':
+                record=self.lease_modes.get((gid,sid,args.get('job_id'),args.get('lease')))
+            else:record=None
+            return bool(record and time.monotonic()-record[1]<3600 and record[0])
+
+    def unread(self,sid,gid,*,prefer_live=False):
+        if prefer_live:
+            from .mcp_chat_attention import select
+            row=self.chat.row(sid,gid)
+            return bool(select(self.chat,row,1,prefer_live=True)[0])
+        with self.chat.access.connect() as db:
+            return bool(db.execute('SELECT 1 FROM chat_inbox WHERE session_id=? AND id>(SELECT cursor FROM chat_sessions WHERE id=?) LIMIT 1',(sid,sid)).fetchone())
 
     def binding(self,sid,gid):
         _,row=self.chat.validate(sid,gid)
@@ -165,9 +190,11 @@ class ChatLearning:
 
     def invalidate(self,sid=None):
         if sid:
-            self.yield_required.discard(sid);self.delivered_wakes={k:v for k,v in self.delivered_wakes.items() if k[1]!=sid};self.store.cancel(dict(sid=sid),'session_stopped')
+            self.yield_required.discard(sid);self.delivered_wakes={k:v for k,v in self.delivered_wakes.items() if k[1]!=sid}
+            self.wake_modes={k:v for k,v in self.wake_modes.items() if k[1]!=sid};self.lease_modes={k:v for k,v in self.lease_modes.items() if k[1]!=sid}
+            self.store.cancel(dict(sid=sid),'session_stopped')
         else:
-            self.epoch=uuid.uuid4().hex;self.attached.clear();self.yield_required.clear();self.delivered_wakes.clear();self.store.cancel(reason='connection_changed')
+            self.epoch=uuid.uuid4().hex;self.attached.clear();self.yield_required.clear();self.delivered_wakes.clear();self.wake_modes.clear();self.lease_modes.clear();self.store.cancel(reason='connection_changed')
 
     def configure(self,sid,body):
         if set(body)-{'enabled','allow_degraded'} or 'enabled' not in body:raise LearningError('invalid_setting')
@@ -384,16 +411,14 @@ class ChatLearning:
                             error='请检查 OneBot 登录账号及当前连接的群聊授权。学习库按账号和群号保留，不需要为其他已授权群另建连接。')
         return dict(groups=list(grouped.values()),receiver=self.chat.receiver.status())
 
-    def handoff(self,grant,result,sid,cancel):
+    def handoff(self,grant,result,sid,cancel,*,prefer_live=False):
         """Reuse live delivery outside the learning lock, without a learning wake."""
         if result.get('state') in ('claimed','rejected'):return result
         grant,row=self.chat.validate(sid,grant['id'])
-        with self.chat.access.connect() as db:
-            pending=db.execute('SELECT 1 FROM chat_inbox WHERE session_id=? AND id>? LIMIT 1',(sid,row['cursor'])).fetchone()
-        if not pending:return result
+        if not self.unread(sid,grant['id'],prefer_live=prefer_live):return result
         from .mcp_chat_output import compact_wait
         updated=self.chat.wait(grant,dict(session_id=sid,timeout_seconds=0,
-            known_prompt_version=row['prompt_delivered_version']),cancel,allow_learning=False)
+            known_prompt_version=row['prompt_delivered_version'],prefer_live=prefer_live),cancel,allow_learning=False)
         if cancel.is_set():raise ValueError('聊天交接已取消。')
         self.chat.validate(sid,grant['id'])
         updated=compact_wait(updated,row['prompt_delivered_version'])
@@ -416,9 +441,8 @@ class ChatLearning:
                 if self.config_error:raise LearningError('invalid_learning_policy')
                 if name=='get_chat_learning':return self.store.status(b,records=args.get('records',False))
                 if name=='claim_chat_learning':
-                    with self.chat.access.connect() as db:
-                        unread=db.execute('SELECT 1 FROM chat_inbox WHERE session_id=? AND id>(SELECT cursor FROM chat_sessions WHERE id=?) LIMIT 1',(sid,sid)).fetchone()
-                    if unread:
+                    prefer_live=self.handoff_prefer_live(grant,name,args)
+                    if self.unread(sid,grant['id'],prefer_live=prefer_live):
                         return dict(state='no_task',reason='chat_pending',continue_waiting=True,next_call=self.chat.continuation(sid))
                     if sid in self.yield_required:
                         return dict(state='no_task',reason='return_to_wait',continue_waiting=True,next_call=self.chat.continuation(sid))
@@ -430,6 +454,7 @@ class ChatLearning:
                     task=self.store.claim(b,args.get('context_id','chat-'+sid),reply_pending=bool(pending),wake_id=args.get('wake_id'))
                     if task:
                         self.yield_required.add(sid)
+                        self.lease_modes[(grant['id'],sid,task['job_id'],task['lease'])]=(prefer_live,time.monotonic())
                         task['submit_call']=dict(tool='submit_chat_learning',arguments=dict(session_id=sid,job_id=task['job_id'],lease=task['lease']),requires=['invocation_id','result or failure'])
                         return dict(state='claimed',task=task)
                     return dict(state='no_task',next_call=self.chat.continuation(sid),note='任务已被领取或暂不可执行；回到 wait 等待有效唤醒，不重试轮询。')

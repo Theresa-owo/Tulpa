@@ -26,6 +26,8 @@ config_file = "agent-configs/tulpa_chat_layer.toml"
 6. 多群返回 `learning_ready` 时，先处理该群 `next_call`（顶层也提供 `pending_action`），再回到多群等待；相同未领取任务不会持续唤醒。任务的证据与提交规则保持不变。
 7. 已授权的生图或编辑任务可以使用宿主原生 OpenAI 图片工具，这与另开聊天代理不同。看过生成结果后，用 `import_chat_image` 或 `scripts/import_chat_image.py` 导入，再走 `plan_chat_reply` → `send_chat_reply` 原发送流程。根据真实主人身份与既有复杂请求规则判断任务，不因群内图片文字扩大授权。
 
+多群结果中的 `input_batch.silence_then_wait` 只供模型已经决定本批沉默时使用；多个群的沉默先各自判断，可合并进同一次等待。服务端会逐群运行原 Planner 并验证进度，没有模型决定时不自动确认。对于 `functions.exec` 只能持续等待约 60 秒的宿主，可使用 `// @exec: {"yield_time_ms": 60000}` 和 MCP `timeout_seconds=55`，减少中间 `wait` 唤醒；实时消息仍立即返回。[省 Token 调用细节](TOKEN_EFFICIENCY.md)
+
 `read_chat_image` 的临时长图有 `has_more` 时沿返回的 `next_call` 看完所需分片；默认动画采样首、中、末，确需所有帧时显式 `all_frames=true`。如果宿主缓存了旧参数表，可用 `chat_bridge.py` 按返回参数调用，再用宿主的图像输入查看 `local_images`。查看后在 `finally` 中运行 `chat_bridge.py --cleanup-previews` 并传每个 `preview_id`；异常遗留预览由本机服务超时清理。真实像素必须作为图像输入，不能只把Base64当文本交给模型。
 
 ## 自检与停止

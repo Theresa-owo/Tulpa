@@ -77,7 +77,7 @@ def schemas(tool):
                   quiet_seconds=dict(type='number', minimum=0, maximum=5, default=0),
                   prefer_live=dict(type='boolean',default=False,description='先处理实时消息和近期主人请求；暂缓旧积压，原事件不确认、不删除，可随时关闭本选项补读。'),
                   limit=dict(type='integer', minimum=1, maximum=50, default=30)), ['session_id']),
-        tool('wait_chat_messages_many', '同时等待本连接1至8个已开启会话；任一群就绪即返回，不被空闲群拖延。results 可只含一个群，各群保留完整 Planner/learning/materials 与 next_call。完成群内动作后按顶层 next_call 继续多群等待，未返回群下次继续；只确认各群实际处理完的 read_through_id。默认立即交付，timeout_seconds=0 不等待。不会开启会话或发送消息。',
+        tool('wait_chat_messages_many', '同时等待本连接1至8个已开启会话；任一群就绪即返回，不被空闲群拖延。results 可只含一个群，各群保留完整 Planner/learning/materials 与 next_call。明确决定本批沉默时可用 input_batch.silence_then_wait，多个群先处理完再合并。只确认实际处理完的进度。默认立即交付，timeout_seconds=0 不等待。不会开启会话或发送消息。',
              dict(session_ids=dict(type='array',minItems=1,maxItems=8,uniqueItems=True,items=dict(type='string',minLength=32,maxLength=32)),
                   wait_state_id=dict(type='string',minLength=32,maxLength=32,description='原样沿用next_call的等待状态，绑定本连接，省去反复传8群参数；重启过期时用session_ids恢复。'),
                   acknowledge_through_ids=dict(type='object',maxProperties=8,additionalProperties=dict(type='integer',minimum=0)),
@@ -755,6 +755,12 @@ class MCPChat:
                     state_id=uuid.uuid4().hex
                     self.wait_states[state_id]=(grant['id'],time.time(),continuation,reaction_seen)
                 result['next_call']=dict(tool='wait_chat_messages_many',arguments=dict(wait_state_id=state_id))
+                for packet in results:
+                    batch=packet.get('input_batch',{})
+                    if packet.get('decision_required') and packet.get('messages') and not packet.get('has_more') and batch.get('id'):
+                        batch['silence_then_wait']=dict(tool='wait_chat_messages_many',
+                            arguments=dict(wait_state_id=state_id,silence_batches={packet['session_id']:batch['id']}),
+                            when='仅在明确决定本批沉默且其他就绪群已处理后使用；多群沉默可合并。')
             else:result['next_call']=dict(tool='wait_chat_messages_many',arguments=continuation)
         return result
 
@@ -833,7 +839,7 @@ class MCPChat:
                             if same_class and candidate[2].get('batchable'):
                                 chosen.append(candidate);break
                     packets=[next(item[1]) for item in chosen]
-                    for packet in packets:self.learning.mark_delivered(grant,packet)
+                    for packet in packets:self.learning.mark_delivered(grant,packet,prefer_live=bool(args.get('prefer_live')))
                     return packets
                 with timing.span('wait.event_sleep'):
                     signal.wait(min(.1,max(0,deadline-time.monotonic())))

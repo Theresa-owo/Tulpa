@@ -60,6 +60,10 @@ async def transport(service,token,sids,configure):
                 assert json.loads(bounded(start)).get('delivery')!='deferred_unread'
                 payload=await client.call_tool('wait_chat_messages_many',{'session_ids':sids,'timeout_seconds':0})
                 assert payload.structuredContent is None and data(payload)['next_call']['arguments']['wait_state_id']
+                live=next(item for item in data(payload)['results'] if item['session_id']==sids[2])
+                shortcut=live['input_batch']['silence_then_wait']
+                assert shortcut['arguments']['silence_batches']=={sids[2]:live['input_batch']['id']}
+                assert shortcut['arguments']['wait_state_id']==data(payload)['next_call']['arguments']['wait_state_id']
                 context=data(await client.call_tool('get_chat_session',dict(session_id=sids[2],view='context')))
                 plan=data(await client.call_tool('plan_chat_reply',dict(session_id=sids[2],batch_id=context['input_batch']['id'],action='reply',expressions=['text'],intent='自然接话')))
                 assert plan['state']=='READY',plan
@@ -143,11 +147,34 @@ def main():
                     text='很长但完整的群友原话'*500
                     chat.receive(dict(post_type='message',message_type='group',self_id=111,group_id=222,user_id=333,message_id=500,time=time.time(),message=[dict(type='text',data={'text':text})]))
                     args=dict(session_ids=sids,timeout_seconds=0,known_prompt_versions={sid:chat.public(chat.row(sid))['prompt_version'] for sid in sids})
+                    before_silence=chat.row(sids[0])['cursor']
                     r=chat.wait_many(grant,args,cancel,allow_learning=False);p=r['results'][0]
                     assert p['messages'][-1]['content']==text and p['decision_required']
+                    assert chat.row(sids[0])['cursor']==before_silence,'Merely offering a shortcut ACKed an undecided batch'
                     short=r['next_call']['arguments'];assert chars(short)<chars(args)*.2
-                    acked=chat.wait_many(grant,dict(short,silence_batches={sids[0]:p['input_batch']['id']}),cancel,allow_learning=False)
+                    shortcut=p['input_batch']['silence_then_wait']
+                    assert shortcut['tool']=='wait_chat_messages_many'
+                    assert shortcut['arguments']==dict(short,silence_batches={sids[0]:p['input_batch']['id']})
+                    # One explicit model decision and one follow-up wait run
+                    # the original SILENT planner + ACK, without another host call.
+                    acked=chat.wait_many(grant,shortcut['arguments'],cancel,allow_learning=False)
                     assert chat.row(sids[0])['cursor']==p['read_through_id']
+                    assert not OneBot.sent
+                    # Two distinct silence decisions can share one model tool
+                    # round-trip while retaining separate planner/ACK state.
+                    for index in (4,5):
+                        chat.receive(dict(post_type='message',message_type='group',self_id=111,group_id=222+index,user_id=333,
+                            message_id=800+index,time=time.time(),message=[dict(type='text',data={'text':'fixture'})]))
+                    pair=chat.wait_many(grant,args,cancel,allow_learning=False)
+                    assert {item['session_id'] for item in pair['results']}=={sids[4],sids[5]}
+                    shortcuts=[item['input_batch']['silence_then_wait'] for item in pair['results']]
+                    assert all(item['arguments']['wait_state_id']==pair['next_call']['arguments']['wait_state_id'] for item in shortcuts)
+                    silences={sid:batch for item in shortcuts for sid,batch in item['arguments']['silence_batches'].items()}
+                    with patch.object(chat.turns,'plan',wraps=chat.turns.plan) as original_planner:
+                        chat.wait_many(grant,dict(pair['next_call']['arguments'],silence_batches=silences),cancel,allow_learning=False)
+                    assert original_planner.call_count==2
+                    assert all(call.args[1]['action']=='silence' and call.kwargs.get('settle_only') for call in original_planner.call_args_list)
+                    assert all(chat.row(item['session_id'])['cursor']==item['read_through_id'] for item in pair['results'])
                     assert not OneBot.sent
                     # Persistent send fence blocks an already READY plan,
                     # survives lease expiry, and cannot be reopened by renewal.

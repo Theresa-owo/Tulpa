@@ -403,7 +403,8 @@ class MCPTools:
             data=self.chat.call(grant,name,arguments,cancel)
             if name in ('claim_chat_learning','submit_chat_learning'):
                 if name=='submit_chat_learning' and data.get('state')!='rejected':learning_receipt=dict(data)
-                data=self.chat.learning.handoff(grant,data,arguments['session_id'],cancel)
+                prefer_live=self.chat.learning.handoff_prefer_live(grant,name,arguments)
+                data=self.chat.learning.handoff(grant,data,arguments['session_id'],cancel,prefer_live=prefer_live)
             if name in ('plan_chat_reply','send_chat_reply','send_chat_message',REACTION_TOOL):
                 data=self.chat.refresh_rejected(grant,data,arguments['session_id'],cancel)
             if name=='wait_chat_messages' and arguments.get('response_format','compact')=='compact':
