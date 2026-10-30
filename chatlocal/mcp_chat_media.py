@@ -75,10 +75,14 @@ def schemas(tool, scope):
                   sticker_id=dict(type='string', minLength=32, maxLength=32), prefer_original=dict(type='boolean', default=False)), ['session_id']),
         tool('import_chat_image', '导入外部生成或用户提供的图片，返回预览像素和本会话的 sticker_id；仅保存图片，不会发到 QQ。data_base64 是原图的纯 Base64，不接受路径、URL 或 data: 前缀。支持 PNG/JPEG/GIF/WebP，原图最多6 MiB；相同图片重复导入返回相同编号。核对预览后用 plan_chat_reply(expressions=["sticker"]) → send_chat_reply 或 send_chat_sticker 发送。',
              dict(**sid, data_base64=dict(type='string', minLength=4, maxLength=MAX_BASE64_LENGTH)), ['session_id', 'data_base64']),
-        tool('read_chat_image', '读取当前持续聊天事件中的图片/表情包，直接向外部模型返回像素；动图最多3个采样帧。event_id 是 wait_chat_messages 的 id，index 是 image_index。未看图不可猜内容。',
+        tool('read_chat_image', '读取当前持续聊天事件中的图片/表情包，直接返回实际像素。临时读取的长图分片时按 next_call 继续；动图默认采样首、中、末帧，可明确 all_frames 逐页读取全部帧。event_id 是 wait_chat_messages 的 id，index 是 image_index。未看图不可猜内容。',
              dict(**sid, event_id=dict(type='integer', minimum=1), index=dict(type='integer', minimum=0, maximum=7, default=0),
                   max_frames=dict(type='integer',minimum=1,maximum=3,default=3,description='需要动画变化时用3；只需首帧可设1降低视觉输入，不能据此推断完整动画。'),
-                  prefer_original=dict(type='boolean',default=False,description='仅已有像素清晰度不足时补原件；客户端完全看不到图片不适用，也不保证有原图。')), ['session_id', 'event_id']),
+                  prefer_original=dict(type='boolean',default=False,description='仅已有像素清晰度不足时补原件；客户端完全看不到图片不适用，也不保证有原图。'),
+                  temporary=dict(type='boolean',default=False,description='临时缓存、按需分片读取，完成后删除临时副本；长图逐页沿next_call读取。'),
+                  read_id=dict(type='string',pattern='^[a-f0-9]{32}$',description='仅传本会话上页返回的临时图片编号。'),
+                  tile_offset=dict(type='integer',minimum=0,default=0,description='仅按上页next_call顺序继续。'),
+                  all_frames=dict(type='boolean',default=False,description='明确需要时逐帧分页；默认保持首/中/末采样。')), ['session_id', 'event_id']),
         tool('list_chat_stickers', '分页查表情。source=library 搜本连接已看图笔记（无网络）；默认 qq 查 QQ 收藏。只有 sendable=true 的本地哈希验证图可直接发送；未知图先 read_chat_sticker。',
              dict(**sid, query=dict(type='string', maxLength=100), offset=dict(type='integer', minimum=0, default=0), refresh=dict(type='boolean', default=False), source=dict(type='string',enum=['qq','library'],default='qq')), ['session_id']),
         tool('read_chat_sticker', '读取本会话已列出的收藏表情或已读取图片，返回实际像素。动画采样不等于看完全部动作；不调用 Tulpa 模型。', asset, ['session_id', 'sticker_id']),
@@ -295,6 +299,8 @@ class ChatMedia:
         self.cache_lock = threading.Lock()
         self.fetch_locks = [threading.Lock() for _ in range(16)]
         self.root = self.access.path.parent/'mcp-chat-media'
+        from .mcp_chat_temp_images import TemporaryImages
+        self.temporary = TemporaryImages(self)
         with self.access.connect() as db:
             db.executescript('''
                 CREATE TABLE IF NOT EXISTS chat_media_assets(
@@ -348,6 +354,11 @@ class ChatMedia:
             row = db.execute('SELECT * FROM chat_media_assets WHERE id=? AND session_id=?',(aid,sid)).fetchone()
         if not row:raise ValueError('表情编号不属于此会话；请先读取图片或列出收藏表情。')
         return dict(row)
+
+    def temporary_asset(self,sid,asset):
+        if not asset['origin'].startswith('event:'):return False
+        representation=json.loads(asset.get('representation') or '{}')
+        return self.temporary.enabled(sid) or representation.get('temporary_read') is True
 
     def upsert(self, sid, origin, ref, description=''):
         aid = hashlib.sha256((sid+'\0'+origin).encode()).hexdigest()[:32]
@@ -437,7 +448,7 @@ class ChatMedia:
             return raw
         finally:lock.release()
 
-    def fetch_bytes(self, row, asset, cancel, *, prefer_original=False):
+    def fetch_bytes(self, row, asset, cancel, *, prefer_original=False,temporary=False):
         if asset['origin'].startswith('library:'):
             grant,_=self.chat.validate(row['id'],row['grant_id'])
             item=self.library.find(grant,row,asset['digest'])
@@ -461,19 +472,22 @@ class ChatMedia:
         account=row['conversation_id'].split(':')[0]
         source={}
         from .mcp_chat_local_media import history_image
+        from .mcp_chat_temp_images import inspect as inspect_temporary,MAX_TEMP_BYTES
+        validate=(inspect_temporary if temporary else lambda raw:pixels(raw,validate_only=True))
+        max_bytes=MAX_TEMP_BYTES if temporary else MAX_BYTES
         grant,_=self.chat.validate(row['id'],row['grant_id'])
         raw=history_image(self.chat.store,row['conversation_id'],ref,cancel,source,
-                          prefer_original=prefer_original,plan=self.access.plan(grant))
+                          prefer_original=prefer_original,plan=self.access.plan(grant),max_bytes=max_bytes)
         if raw is not None:
             try:
-                pixels(raw,validate_only=True)
+                validate(raw)
                 asset['_source_info']=source
                 return raw
             except ValueError:pass
-        raw=find_local(ref,self.access.path.parent,account,cancel,source,prefer_original=prefer_original)
+        raw=find_local(ref,self.access.path.parent,account,cancel,source,prefer_original=prefer_original,max_bytes=max_bytes)
         if raw is not None:
             try:
-                pixels(raw,validate_only=True)
+                validate(raw)
                 asset['_source_info']=source
                 return raw
             except ValueError:pass  # Stale/invalid cache must not suppress fallback.
@@ -484,10 +498,10 @@ class ChatMedia:
                 detail=self.client(row).call('get_image',{'file':ref['file']})
                 if isinstance(detail,dict):
                     with timing.span('image.adapter_local_read'):
-                        raw=reference_bytes(detail,roots(self.access.path.parent,account))
+                        raw=reference_bytes(detail,roots(self.access.path.parent,account),max_bytes=max_bytes)
                     if raw is not None:
                         try:
-                            pixels(raw,validate_only=True);timing.note(image_source='adapter_local')
+                            validate(raw);timing.note(image_source='adapter_local')
                             asset['_source_info']=dict(source='adapter_local',variant='provided')
                             return raw
                         except ValueError:pass
@@ -504,7 +518,7 @@ class ChatMedia:
             try:
                 timing.note(image_source=source)
                 asset['_source_info']=dict(source=source,variant='downloaded')
-                return download(url,cancel)
+                return download(url,cancel,max_bytes=max_bytes) if temporary else download(url,cancel)
             except ValueError:
                 if cancel.is_set():raise
         raise ValueError('SnowLuma 未提供可读取的图片地址；没有读取任意本地文件。')
@@ -635,7 +649,13 @@ class ChatMedia:
         if old:
             if old['signature']!=signature:raise ValueError('同一个幂等编号不能用于不同表情或操作。')
             return self.actions.get(old['id'],grant['id']),[]
-        raw=self.bytes(row,asset,cancel)
+        temporary=self.temporary_asset(sid,asset)
+        if temporary:
+            # The seen image was deliberately not retained. Re-fetch its exact
+            # original on an explicit send/collect without pinning a copy.
+            raw=self.fetch_bytes(row,dict(asset,digest=''),cancel,temporary=True)
+            if len(raw)>MAX_BYTES:raise ValueError('发送或收藏的原图超过单张 6 MiB 上限。')
+        else:raw=self.bytes(row,asset,cancel)
         # A changed remote asset must be viewed again, not substituted silently.
         if hashlib.sha256(raw).hexdigest()!=asset['digest']:raise ValueError('图片内容已变化，请重新看图后再操作。')
         if asset['origin'].startswith('library:') and not self.library.valid(grant,self.library.find(grant,row,asset['digest'])):
@@ -712,7 +732,7 @@ class ChatMedia:
                     local=self.library.pin(grant,row,item,raw) if item else dict(state='FAILED',code='knowledge_capacity')
                 except (OSError,ValueError):local=dict(state='FAILED',code='local_write_failed')
             if 'description' in args:
-                try:notes=self.library.note(grant,row,asset,args)
+                try:notes=self.library.note(grant,row,asset,args,verified_raw=raw)
                 except (OSError,ValueError):notes=dict(state='FAILED',code='note_write_failed')
             if not duplicate and args.get('save_qq',True):
                 try:
@@ -749,6 +769,8 @@ class ChatMedia:
 
     def event_image(self,grant,args,cancel,*,remember=True):
         row=self.guard(grant,args['session_id'],'read_chat_image',cancel);sid=row['id']
+        if args.get('temporary') or args.get('read_id') or self.temporary.enabled(sid):
+            return self.temporary.read(grant,row,args,cancel,remember=remember)
         ref=self.event_reference(sid,args)
         aid=self.upsert(sid,f'event:{args["event_id"]}:{args.get("index",0)}',ref)
         result,frames=self.read(grant,row,aid,'read_chat_image',cancel,remember=remember,prefer_original=args.get('prefer_original',False))
@@ -831,11 +853,17 @@ class ChatMedia:
         if name=='note_chat_sticker':
             asset=self.asset(sid,args['sticker_id'])
             if not asset['seen']:raise ValueError('请先读取图片再记录含义。')
-            if not self.library.find(grant,row,asset['digest']):
-                raw=self.bytes(row,asset,cancel)
+            item=self.library.find(grant,row,asset['digest']);verified_raw=None
+            temporary=self.temporary_asset(sid,asset)
+            if not item or (temporary and self.library.verified_bytes(grant,row,item)[0] is None):
+                # A temporary read intentionally did not pin the original.
+                # Refetch only for this explicit note and verify the same hash.
+                raw=(self.fetch_bytes(row,dict(asset,digest=''),cancel,temporary=True) if temporary
+                     else self.bytes(row,asset,cancel))
                 if hashlib.sha256(raw).hexdigest()!=asset['digest']:raise ValueError('图片变化，请重新看图。')
-                self.library.remember(grant,row,asset,raw,{})
+                if not item:self.library.remember(grant,row,asset,raw,{})
+                if temporary:verified_raw=raw
             self.guard(grant,sid,name,cancel)
-            result=self.library.note(grant,row,asset,args)
+            result=self.library.note(grant,row,asset,args,verified_raw=verified_raw)
             return dict(saved=True,**result,note='本授权范围的模型笔记；未修改 QQ 备注，未自动保留原件。'),[]
         return self.mutate(grant,row,name,args,cancel)

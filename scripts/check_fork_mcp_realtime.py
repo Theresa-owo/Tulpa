@@ -4,6 +4,7 @@ No credentials, real sessions, external models or QQ sends are used.
 """
 from concurrent.futures import ThreadPoolExecutor
 from http.server import ThreadingHTTPServer
+import json
 from pathlib import Path
 import socket
 import sys
@@ -205,6 +206,33 @@ def main():
                         packet=chat.wait_many(grant,dict(session_ids=sessions[:2],timeout_seconds=0),cancel)
                     assert packet['event']=='messages' and packet['results'][0]['session_id']==sessions[1]
                     drain()
+
+                    # An ignored learning hint must not wake the model hundreds
+                    # of times for the same job; new chat and new stages still
+                    # win immediately, and an abandoned hint is retried.
+                    policy=root/'mcp-efficiency.json'
+                    policy.write_text(json.dumps(dict(enabled=True,learning_wake_retry_seconds=60)),'utf-8')
+                    wake_id=['a'*64]
+                    def readiness(binding):
+                        return (dict(ready=True,reason='ready',job_id='b'*32,stage='extract',wake_id=wake_id[0])
+                                if binding['sid']==sessions[0] else dict(ready=False,reason='idle'))
+                    with patch.object(chat.learning,'readiness',side_effect=readiness):
+                        first=chat.wait_many(grant,dict(session_ids=sessions[:2],timeout_seconds=0),cancel)
+                        assert first['event']=='learning_ready'
+                        assert first['pending_action']==first['results'][0]['next_call']
+                        again=chat.wait_many(grant,dict(session_ids=sessions[:2],timeout_seconds=0),cancel)
+                        assert again['event']=='idle',again
+                        add(1,'new input must not wait for a learning retry')
+                        current=chat.wait_many(grant,dict(session_ids=sessions[:2],timeout_seconds=0),cancel)
+                        assert current['event']=='messages' and current['results'][0]['session_id']==sessions[1]
+                        drain()
+                        wake_id[0]='c'*64
+                        changed=chat.wait_many(grant,dict(session_ids=sessions[:2],timeout_seconds=0),cancel)
+                        assert changed['event']=='learning_ready' and changed['pending_action']['arguments']['wake_id']==wake_id[0]
+                        key=(grant['id'],sessions[0],wake_id[0]);chat.learning.delivered_wakes[key]-=61
+                        retry=chat.wait_many(grant,dict(session_ids=sessions[:2],timeout_seconds=0),cancel)
+                        assert retry['event']=='learning_ready' and retry['pending_action']['arguments']['wake_id']==wake_id[0]
+                    policy.unlink()
                     active=[sid for sid in sessions if chat.row(sid)['active']]
                     with ThreadPoolExecutor(1) as pool:
                         future=pool.submit(chat.wait_many,grant,dict(session_ids=active,timeout_seconds=5),cancel,allow_learning=False)

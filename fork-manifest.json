@@ -23,6 +23,8 @@
     "scripts/check_fork_permissions.py",
     "scripts/check_fork_owner_gate.py",
     "scripts/check_fork_token_efficiency.py",
+    "scripts/check_mcp_temp_images.py",
+    "scripts/check_mcp_image_import.py",
     "scripts/check_chat_memory.py",
     "scripts/check_chat_wire_deltas.py",
     "scripts/check_upgrade.py",

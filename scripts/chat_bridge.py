@@ -12,23 +12,45 @@ import os
 from pathlib import Path
 import sys
 import tomllib
+import uuid
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(ROOT))
+from chatlocal.mcp_chat_temp_images import cleanup_previews
+
+
+def temporary_delivery(value):
+    if not isinstance(value,dict):return False
+    if value.get('temporary') is True:return True
+    if any(item.get('temporary') is True for item in value.get('materials',{}).get('images',[]) if isinstance(item,dict)):return True
+    return any(temporary_delivery(item) for item in value.get('results',[]) if isinstance(item,dict)) or temporary_delivery(value.get('updated_chat'))
 
 
 def payload(result):
     value=result.structuredContent
     if value is None:value=json.loads(next(c.text for c in result.content if c.type=='text'))
-    paths=[]
+    paths=[];temporary=temporary_delivery(value)
+    if temporary:
+        preview_root=ROOT/'data/mcp-chat-temporary-previews'
+        cleanup_previews(preview_root)
     for block in result.content:
         if block.type!='image':continue
         raw=base64.b64decode(block.data,validate=True);digest=hashlib.sha256(raw).hexdigest()
         ext={'image/png':'.png','image/jpeg':'.jpg','image/webp':'.webp','image/gif':'.gif'}.get(block.mimeType)
         if not ext:raise ValueError('Unsupported image representation')
-        dest=ROOT/'.tmp/chat-bridge/images'/(digest+ext);dest.parent.mkdir(parents=True,exist_ok=True)
-        if not dest.exists():dest.write_bytes(raw)
-        paths.append(dict(path=str(dest),sha256=digest,mime_type=block.mimeType))
-    if paths:value=dict(value,local_images=paths,image_instruction='用宿主view_image读取这些真实像素；路径不是已看图证明。')
+        if temporary:
+            ident=uuid.uuid4().hex;dest=preview_root/(ident+ext);dest.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+            if dest.parent.is_symlink() or getattr(dest.parent,'is_junction',lambda:False)():raise ValueError('Temporary preview directory is not a plain directory')
+            with os.fdopen(os.open(dest,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),'wb') as stream:stream.write(raw)
+            paths.append(dict(path=str(dest),sha256=digest,mime_type=block.mimeType,preview_id=ident))
+        else:
+            dest=ROOT/'.tmp/chat-bridge/images'/(digest+ext);dest.parent.mkdir(parents=True,exist_ok=True)
+            if not dest.exists():dest.write_bytes(raw)
+            paths.append(dict(path=str(dest),sha256=digest,mime_type=block.mimeType))
+    if paths:
+        instruction='用宿主view_image读取这些真实像素；路径不是已看图证明。'
+        if temporary:instruction+='读取后在 finally 调用本脚本 --cleanup-previews 与每个 preview_id；未完成时超时自动清理。'
+        value=dict(value,local_images=paths,image_instruction=instruction)
     return value
 
 
@@ -128,4 +150,6 @@ async def main():
 
 if __name__=='__main__':
     sys.stdout.reconfigure(encoding='utf-8')
-    asyncio.run(main())
+    if len(sys.argv)>1 and sys.argv[1]=='--cleanup-previews':
+        print(json.dumps(dict(deleted=cleanup_previews(ROOT/'data/mcp-chat-temporary-previews',sys.argv[2:]))))
+    else:asyncio.run(main())

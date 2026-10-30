@@ -494,6 +494,11 @@ class MCPTools:
             media.library.diagnose(arguments.get('session_id',''),name+'_failed')
             return self.result(dict(error='表情处理暂不可用；外部操作可能已有结果，请用原幂等编号核对，勿换编号重发。消息接收和普通工具不受影响。',error_code='chat_media_failed'))
         finally:
+            if name=='read_chat_image' and cancel.is_set():
+                ident=arguments.get('read_id')
+                if not ident and isinstance(locals().get('data'),dict):
+                    ident=data.get('next_call',{}).get('arguments',{}).get('read_id')
+                if ident:media.temporary.cancel(grant,arguments.get('session_id'),ident)
             if call_id is not None:self.access.finish_call(call_id,status,time.monotonic()-began)
             media.slots.release()
 

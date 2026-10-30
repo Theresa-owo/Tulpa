@@ -19,7 +19,7 @@ def image_md5(ref):
 
 
 @timing.stage('image.history_lookup')
-def history_image(store,cid,ref,cancel,source,*,prefer_original=False,plan=None):
+def history_image(store,cid,ref,cancel,source,*,prefer_original=False,plan=None,max_bytes=MAX_BYTES):
     """Look up message-owned MD5 identities, then verify actual local bytes.
 
     Native source_id and OneBot message_id are not interchangeable. A matching
@@ -57,7 +57,7 @@ def history_image(store,cid,ref,cancel,source,*,prefer_original=False,plan=None)
             if path is None:continue
             reads+=1
             if reads>8:return None
-            raw=read_path(str(path),[path.parent.parent])
+            raw=read_path(str(path),[path.parent.parent],max_bytes=max_bytes)
             if raw is None:continue
             if item.get('sha256') and hashlib.sha256(raw).hexdigest()!=item['sha256']:continue
             if not thumb and hashlib.md5(raw).hexdigest()!=md5:continue
@@ -90,7 +90,7 @@ def roots(directory,account,kind='local_roots'):
     return allowed
 
 
-def read_path(value,allowed):
+def read_path(value,allowed,*,max_bytes=MAX_BYTES):
     if not isinstance(value,str) or len(value)>2048:return None
     if value.startswith('file:'):
         parsed=urlsplit(value)
@@ -102,31 +102,31 @@ def read_path(value,allowed):
         if not path.is_absolute():return None
         path=path.resolve(strict=True)
         if not any(path.is_relative_to(root) for root in allowed):return None
-        if not path.is_file() or path.stat().st_size>MAX_BYTES:return None
-        with path.open('rb') as f:raw=f.read(MAX_BYTES+1)
-        return raw if 0<len(raw)<=MAX_BYTES else None
+        if not path.is_file() or path.stat().st_size>max_bytes:return None
+        with path.open('rb') as f:raw=f.read(max_bytes+1)
+        return raw if 0<len(raw)<=max_bytes else None
     except (ValueError,OSError):return None
 
 
-def reference_bytes(ref,allowed):
+def reference_bytes(ref,allowed,*,max_bytes=MAX_BYTES):
     encoded=ref.get('base64')
     file=ref.get('file','')
     if not encoded and isinstance(file,str) and file.startswith('base64://'):encoded=file[9:]
-    if isinstance(encoded,str) and len(encoded)<=(MAX_BYTES+2)//3*4:
+    if isinstance(encoded,str) and len(encoded)<=(max_bytes+2)//3*4:
         try:
             raw=base64.b64decode(encoded,validate=True)
-            if 0<len(raw)<=MAX_BYTES:return raw
+            if 0<len(raw)<=max_bytes:return raw
         except ValueError:pass
     for key in ('local_file','file','path'):
-        raw=read_path(ref.get(key),allowed)
+        raw=read_path(ref.get(key),allowed,max_bytes=max_bytes)
         if raw is not None:return raw
     return None
 
 
 @timing.stage('image.local_lookup')
-def find_local(ref,directory,account,cancel,source=None,*,prefer_original=False):
+def find_local(ref,directory,account,cancel,source=None,*,prefer_original=False,max_bytes=MAX_BYTES):
     allowed=roots(directory,account)
-    raw=reference_bytes(ref,allowed)
+    raw=reference_bytes(ref,allowed,max_bytes=max_bytes)
     if raw is not None:
         if source is not None:source.update(source='local_reference',variant='provided')
         timing.note(image_source='local_reference')
@@ -149,7 +149,7 @@ def find_local(ref,directory,account,cancel,source=None,*,prefer_original=False)
                 for prefix in (md5,md5.upper()):
                     for i,path in enumerate(folder.glob(prefix+'*')):
                         if i>=16 or cancel.is_set():break
-                        raw=read_path(str(path),allowed+hash_roots)
+                        raw=read_path(str(path),allowed+hash_roots,max_bytes=max_bytes)
                         if raw is None:continue
                         if variant=='Ori' and hashlib.md5(raw).hexdigest()!=md5:continue
                         if variant=='Thumb' and not re.fullmatch(md5+r'_[0-9]+\.[A-Za-z0-9]{1,8}',path.name,re.I):continue

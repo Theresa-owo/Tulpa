@@ -288,6 +288,16 @@ Tulpa 的发送 / 群管理勾选是持续授权，调用会直接执行；外�
 
 同一 Tulpa 数据目录、端口和授权未变时，重启后可复用原地址和 Token；保留数据升级见 [UPGRADE.md](UPGRADE.md)。不需要每次重新导入或重新授权。
 
+## 发送生成的图片
+
+在已授权的持续聊天中，先用宿主可用的图像生成工具生成并查看结果；Codex 的内置 OpenAI 图片工具可用于此目的。得到本机 PNG/JPEG/GIF/WebP 文件后，在运行 Tulpa 客户端的环境执行：
+
+```powershell
+python scripts/import_chat_image.py '生成结果的绝对路径.png' --config "$env:USERPROFILE/.codex/config.toml" --server tulpa --session '当前会话ID'
+```
+
+脚本只导入图片并返回当前会话的 `sticker_id`，不会自动发 QQ 消息，也不输出凭据或 Base64。Agent 核对结果后，用 `plan_chat_reply(expressions=["sticker"])` 取得 READY，再用 `send_chat_reply` 的 sticker 气泡发送；不确定的发送回执先核对，不更换编号重发。当前原件导入上限为 6 MiB；宿主看不到像素、生成失败或文件超过上限时应报告具体限制，不猜图或假装发送成功。
+
 ## 交给 Agent 配置
 
 复制下面这段话给本机 Agent，并把方括号内的内容换成自己的情况。Token 在本机配置界面或凭据文件中填写，不需要贴到公共聊天、Issue 或截图中。

@@ -82,6 +82,9 @@ class ChatLearning:
         with self.store.db() as db:
             self.enabled={r['scope'] for r in db.execute('SELECT scope FROM language_libraries WHERE enabled=1')}
         self.attached=set();self.yield_required=set();self.shutdown=threading.Event();self.worker=None
+        # Hints are not claims: retain the job and retry a missed hint, but do
+        # not make the host reprocess an unchanged long context in a tight loop.
+        self.delivered_wakes={}
 
     def resume(self):
         if self.worker and self.worker.is_alive():return
@@ -130,9 +133,27 @@ class ChatLearning:
                 self.yield_required.discard(row['id'])
                 b=self.binding(row['id'],grant['id']);self.ensure(b);ready=self.readiness(b)
                 if ready['ready']:
+                    from .mcp_efficiency import policy as efficiency_policy
+                    cfg=efficiency_policy(self.chat.access)
+                    key=(grant['id'],row['id'],ready.get('wake_id'))
+                    if cfg['enabled'] and ready.get('wake_id'):
+                        last=self.delivered_wakes.get(key)
+                        if last is not None and time.monotonic()-last<cfg['learning_wake_retry_seconds']:
+                            return dict(ready=False,reason='wake_already_delivered')
                     ready['next_call']=dict(tool='claim_chat_learning',arguments=dict(session_id=row['id'],wake_id=ready['wake_id']))
                 return ready
             except (ValueError,OSError,sqlite3.Error):return dict(ready=False,reason='unavailable')
+
+    def mark_delivered(self,grant,packet):
+        wake=packet.get('learning_ready',{})
+        if packet.get('event')!='learning_ready' or not wake.get('wake_id'):return
+        from .mcp_efficiency import policy as efficiency_policy
+        if not efficiency_policy(self.chat.access)['enabled']:return
+        with self.chat.lock:
+            now=time.monotonic()
+            # A new stage has a new wake_id and is immediately deliverable.
+            self.delivered_wakes={k:v for k,v in self.delivered_wakes.items() if now-v<3600}
+            self.delivered_wakes[(grant['id'],packet['session_id'],wake['wake_id'])]=now
 
     def binding(self,sid,gid):
         _,row=self.chat.validate(sid,gid)
@@ -144,9 +165,9 @@ class ChatLearning:
 
     def invalidate(self,sid=None):
         if sid:
-            self.yield_required.discard(sid);self.store.cancel(dict(sid=sid),'session_stopped')
+            self.yield_required.discard(sid);self.delivered_wakes={k:v for k,v in self.delivered_wakes.items() if k[1]!=sid};self.store.cancel(dict(sid=sid),'session_stopped')
         else:
-            self.epoch=uuid.uuid4().hex;self.attached.clear();self.yield_required.clear();self.store.cancel(reason='connection_changed')
+            self.epoch=uuid.uuid4().hex;self.attached.clear();self.yield_required.clear();self.delivered_wakes.clear();self.store.cancel(reason='connection_changed')
 
     def configure(self,sid,body):
         if set(body)-{'enabled','allow_degraded'} or 'enabled' not in body:raise LearningError('invalid_setting')

@@ -100,8 +100,14 @@ async def upload(config, session_id, path, server=None):
                     'session_id': session_id, 'data_base64': base64.b64encode(raw).decode('ascii'),
                 })
     data = result.structuredContent
-    if not isinstance(data, dict):
-        raise UploadError('Tulpa 未返回图片导入结果。')
+    if data is None:
+        # Efficiency mode intentionally sends one JSON text block instead of
+        # repeating structuredContent. Import already happened: parse the
+        # receipt rather than report a false failure and encourage retries.
+        content = next((block.text for block in result.content if getattr(block, 'type', None) == 'text'), None)
+        try: data = json.loads(content)
+        except (ValueError, TypeError): raise UploadError('Tulpa 未返回有效图片导入结果。') from None
+    if not isinstance(data, dict):raise UploadError('Tulpa 未返回图片导入结果。')
     if result.isError or not data.get('sticker_id'):
         # Only Tulpa's structured, sanitized diagnostics; never SDK exceptions
         # (which may contain request headers or the uploaded body).

@@ -121,9 +121,13 @@ async def wire(service, grant, readonly, sid, raw):
 def main():
     # Incompressible image exceeds the former 32 KiB MCP body limit by orders
     # of magnitude, while remaining cheap to decode and below the 6 MiB cap.
-    buf = io.BytesIO()
-    Image.frombytes('RGB', (800, 600), os.urandom(800*600*3)).save(buf, 'PNG')
-    raw = buf.getvalue()
+    if len(sys.argv)>1:
+        raw=Path(sys.argv[1]).read_bytes()
+        with Image.open(io.BytesIO(raw)) as image:image.verify()
+    else:
+        buf = io.BytesIO()
+        Image.frombytes('RGB', (800, 600), os.urandom(800*600*3)).save(buf, 'PNG')
+        raw = buf.getvalue()
     assert 1000000 < len(raw) < MAX_BYTES
     events = Events()
     StickerBot.sent = []; StickerBot.collected = []; StickerBot.uncertain = False; StickerBot.block = False
@@ -133,6 +137,7 @@ def main():
     try:
         with tempfile.TemporaryDirectory(prefix='tulpa-image-import-') as tmp, patch.dict('os.environ',isolated_env(),clear=True):
             root = Path(tmp)
+            os.environ['TEMP']=str(root);os.environ['TMP']=str(root)
             (root/'.env').write_text(f'REPLY_ONEBOT_URL=http://127.0.0.1:{upstream.server_port}\nREPLY_ONEBOT_WS_URL=ws://127.0.0.1:{events.port}\nREPLY_ONEBOT_WS_TOKEN=event-fixture\n')
             with patch('chatlocal.onebot.ROOT', root), patch('chatlocal.message_sender.ROOT', root), \
                     patch('chatlocal.mcp_chat_media.download', side_effect=AssertionError('Uploaded image used remote URL')):
@@ -224,13 +229,17 @@ def main():
                     image_path = root/'generated image.png'; image_path.write_bytes(raw)
                     config_path = root/'client.json'
                     config_path.write_text(json.dumps({'mcpServers':{'tulpa':{'url':service.status()['url'],'headers':{'Authorization':'Bearer '+g['token']}}}}))
-                    process = subprocess.run([sys.executable, '-X', 'utf8', str(ROOT/'scripts/import_chat_image.py'), '--config', str(config_path), '--session', sid, str(image_path)],
-                                             capture_output=True, text=True, encoding='utf-8', timeout=30, env=dict(os.environ,**SUBPROCESS_ENV))
-                    assert process.returncode == 0, process.stderr
-                    result = json.loads(process.stdout)
-                    assert result['sticker_id'] == aid and result['preview']['tool'] == 'read_chat_sticker'
-                    assert g['token'] not in process.stdout+process.stderr and base64.b64encode(raw).decode() not in process.stdout
-                    assert len(StickerBot.sent) == 2
+                    for efficient in (False,True):
+                        efficiency=root/'mcp-efficiency.json'
+                        efficiency.write_text(json.dumps(dict(enabled=efficient)),'utf-8')
+                        process = subprocess.run([sys.executable, '-X', 'utf8', str(ROOT/'scripts/import_chat_image.py'), '--config', str(config_path), '--session', sid, str(image_path)],
+                                                 capture_output=True, text=True, encoding='utf-8', timeout=30, env=dict(os.environ,**SUBPROCESS_ENV))
+                        assert process.returncode == 0, (efficient,process.stderr)
+                        result = json.loads(process.stdout)
+                        assert result['sticker_id'] == aid and result['preview']['tool'] == 'read_chat_sticker'
+                        assert g['token'] not in process.stdout+process.stderr and base64.b64encode(raw).decode() not in process.stdout
+                        assert len(StickerBot.sent) == 2
+                    efficiency.unlink()
                     toml_path = root/'client.toml'
                     toml_path.write_text('[mcp_servers.tulpa]\nurl='+json.dumps(service.status()['url'])+'\nbearer_token_env_var="IMAGE_FIXTURE_TOKEN"\n')
                     with patch.dict('os.environ', {'IMAGE_FIXTURE_TOKEN':g['token']}):

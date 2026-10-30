@@ -2,7 +2,8 @@
 import json
 from pathlib import Path
 
-DEFAULTS=dict(enabled=False,images='on_demand',learning_hourly_calls=8,learning_interval_seconds=300)
+DEFAULTS=dict(enabled=False,images='on_demand',learning_hourly_calls=8,learning_interval_seconds=300,
+              learning_wake_retry_seconds=60)
 
 
 def policy(access):
@@ -13,7 +14,8 @@ def policy(access):
     if not isinstance(value,dict) or set(value)-set(DEFAULTS) or type(value.get('enabled',False)) is not bool:raise ValueError('Token 配置无效。')
     cfg=DEFAULTS|value
     if cfg['images'] not in ('on_demand','automatic'):raise ValueError('图片交付配置无效。')
-    for key,low,high in (('learning_hourly_calls',1,100),('learning_interval_seconds',0,3600)):
+    for key,low,high in (('learning_hourly_calls',1,100),('learning_interval_seconds',0,3600),
+                         ('learning_wake_retry_seconds',5,3600)):
         if type(cfg[key]) is not int or not low<=cfg[key]<=high:raise ValueError('学习预算配置无效。')
     return cfg
 

@@ -55,8 +55,10 @@ def prepare(chat,grant,data,cancel,*,forward_session_id=None):
                     call_id=chat.access.begin_call(grant['id'],'read_chat_image')
                     info,frames=chat.media.event_image(grant,entry['read_call']['arguments'],cancel,remember=False)
                     # MCPTools.result places one TextContent before these ImageContent blocks.
-                    entry.update(state='pixels_delivered',
+                    entry.update(state='pixels_partial' if info.get('has_more') else 'pixels_delivered',
                         dimensions=info['dimensions'],frame_indices=info['frame_indices'],thumbnail=info['thumbnail'],representation=info['representation'])
+                    if info.get('temporary'):entry['temporary']=True
+                    if info.get('has_more'):entry['read_call']=info['next_call']
                     prepared.append((entry,segments,frames))
                 except RateLimited:entry['state']='rate_limited'
                 except (ValueError,OSError):
@@ -72,13 +74,18 @@ def prepare(chat,grant,data,cancel,*,forward_session_id=None):
         try:
             chat.media.guard(current,sid,'read_chat_image',cancel)
             chat.media.event_reference(sid,entry['read_call']['arguments'])
-        except ValueError:entry['state']='unavailable'
+        except ValueError:
+            entry['state']='unavailable'
+            ident=entry.get('read_call',{}).get('arguments',{}).get('read_id')
+            if ident:chat.media.temporary.cancel(grant,sid,ident)
         else:
             entry['content_indexes']=list(range(1+len(images),1+len(images)+len(frames)))
             images.extend(frames)
         for segment in segments:segment['pixels']=dict(state=entry['state'],content_indexes=entry.get('content_indexes',[]))
     if cancel.is_set():
         for entry,segments,frames in prepared:
+            ident=entry.get('read_call',{}).get('arguments',{}).get('read_id')
+            if ident:chat.media.temporary.cancel(grant,sid,ident)
             entry['state']='cancelled';entry.pop('content_indexes',None)
             for segment in segments:segment['pixels']=dict(state='cancelled')
         images=[]
@@ -95,7 +102,8 @@ def prepare(chat,grant,data,cancel,*,forward_session_id=None):
     for key in ('chat_guidance','chat_prompt'):
         if key not in packet:continue
         guidance=packet[key]
-        guidance['image_reads']=[r for r in guidance.get('image_reads',[]) if
+        replacements={(e['event_id'],e.get('image_index')):e['read_call'] for e in entries if e.get('state')=='pixels_partial' and e.get('read_call')}
+        guidance['image_reads']=[replacements.get((r['arguments']['event_id'],r['arguments']['index']),r) for r in guidance.get('image_reads',[]) if
             (r['arguments']['event_id'],r['arguments']['index']) in pending-delivered]
         if not guidance['image_reads']:guidance.pop('image_reads',None)
     return data,images

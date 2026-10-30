@@ -185,6 +185,7 @@ class MCPChat:
 
     def resume(self):
         self.available = True
+        self.media.temporary.resume()
         self.learning.resume()
         with self.access.connect() as db:
             active = db.execute('SELECT 1 FROM chat_sessions WHERE active=1 LIMIT 1').fetchone()
@@ -664,6 +665,7 @@ class MCPChat:
                 db.execute('DELETE FROM chat_detail_cache WHERE session_id=?',(sid,))
             event=self.events.get(sid)
             if event:event.set()
+        self.media.temporary.close(sid)
         return dict(event='stopped',session=self.public(self.row(sid)),note='已停止等待和后续回复；已交给 QQ 的发送无法撤回。其他 MCP 工具仍可使用。')
 
     def stop_all(self, gid=None, reason='用户停止全部'):
@@ -678,6 +680,7 @@ class MCPChat:
             self.available=False
             self.learning.invalidate()
             for event in self.events.values():event.set()
+        self.media.temporary.close()
         self.receiver.stop()
 
     @timing.stage('chat.wait')
@@ -735,6 +738,8 @@ class MCPChat:
                 if key in continuation:continuation[key]={sid:v for sid,v in continuation[key].items() if sid not in terminal}
         result=dict(event=results[0]['event'],results=results,continue_waiting=bool(continuation['session_ids']),
                     note='本次可只返回一个就绪群；先处理该群 next_call，完成后仅确认该群进度，再按顶层 next_call 等待其余群。')
+        if results[0].get('event')=='learning_ready':
+            result['pending_action']=results[0]['next_call']
         from .mcp_runtime_control import state as runtime_state
         control=runtime_state(self.access);controlled=set(control['session_ids'])&set(sids)
         if controlled:
@@ -827,7 +832,9 @@ class MCPChat:
                             same_class=(candidate[0]>=3 and chosen[0][0]>=3) or candidate[0]==chosen[0][0]==0
                             if same_class and candidate[2].get('batchable'):
                                 chosen.append(candidate);break
-                    return [next(item[1]) for item in chosen]
+                    packets=[next(item[1]) for item in chosen]
+                    for packet in packets:self.learning.mark_delivered(grant,packet)
+                    return packets
                 with timing.span('wait.event_sleep'):
                     signal.wait(min(.1,max(0,deadline-time.monotonic())))
         except ChatStopped:

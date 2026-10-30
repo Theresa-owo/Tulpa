@@ -161,9 +161,12 @@ class StickerLibrary:
             finally:temp.unlink(missing_ok=True)
         return dict(state='SAVED',bytes=len(raw),sha256=item['digest'])
 
-    def note(self, grant, row, asset, args):
+    def note(self, grant, row, asset, args, *, verified_raw=None):
         item = self.find(grant,row,asset['digest'])
-        raw, state = self.verified_bytes(grant,row,item)
+        if (verified_raw is not None and item and self.valid(grant,item)
+                and hashlib.sha256(verified_raw).hexdigest()==item['digest']):
+            raw,state=verified_raw,'temporary_source'
+        else:raw, state = self.verified_bytes(grant,row,item)
         if raw is None:raise ValueError('原件或已看图依据不可用，请重新 read_chat_sticker 后再记笔记。')
         fields = note_fields(args);gid,account = self.identity(grant,row);now = time.time()
         with self.access.connect() as db:
